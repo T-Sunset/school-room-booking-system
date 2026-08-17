@@ -1,0 +1,352 @@
+// index.ts
+import express, {Request, Response} from "express"
+import cors from "cors"
+import {approveBooking, createBooking, denyBooking, getPendingBookings} from "./services/bookingService"
+import { createBand, approveBand, denyBand, getPendingBands } from "./services/bandService"
+import { authMiddleware, authTokenOnly } from "./middleware/authMiddleware"
+import { AuthenticatedRequest } from "./types/auth"
+import { createRoom, editRoom, getRooms, getRoomSingle, getRoomWithRequirements, removeRoom } from "./services/roomService"
+import { changeUserRole, createUser, getSpecificUser, getUsers } from "./services/userService"
+
+// Set up the Express app and middleware
+const app = express()
+app.use(cors())
+app.use(express.json())
+
+// Test route 
+app.get("/", (req, res) => {
+    res.send("Backend is running")
+})
+
+// Health check
+app.get("/health", (req:Request, res:Response) => {
+    res.json({status:"ok"})
+})
+
+// Receive Band application 
+app.post("/bands", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const result = await createBand(req.body, req.user)
+        return res.status(200).json({
+            message:"Band application created.",
+            band:result
+        })
+    } catch(err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// View Band Applications 
+app.get("/bands/pending", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const result = await getPendingBands(req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// Approve Band 
+app.patch("/bands/:id/approve", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const bandId = req.params.id 
+        if (typeof bandId !== "string") {
+            return res.status(400).json({
+                error:"Invalid booking ID."
+            })
+        }
+        const result = await approveBand(bandId, req.user)
+        return res.json({
+            success:true,
+            status:"approved"
+        })
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// Deny Band 
+app.patch("/bands/:id/deny", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const bandId = req.params.id 
+        if (typeof bandId !== "string") {
+            return res.status(400).json({
+                error:"Invalid booking ID."
+            })
+        }
+        const result = await denyBand(bandId, req.user)
+        return res.json({
+            success:true,
+            status:"denied"
+        })
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+
+// Receive Booking 
+app.post("/bookings", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const result = await createBooking(req.body, req.user)
+        return res.status(200).json({
+            message:"Booking created.",
+            booking:result
+        })
+    } catch(err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// View Bookings 
+app.get("/bookings/pending", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const result = await getPendingBookings(req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// Approve Booking 
+app.patch("/bookings/:id/approve", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const bookingId = req.params.id 
+        if (typeof bookingId !== "string") {
+            return res.status(400).json({
+                error:"Invalid booking ID."
+            })
+        }
+        const result = await approveBooking(bookingId, req.user)
+        return res.json({
+            success:true,
+            status:"approved"
+        })
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// Deny Booking 
+app.patch("/bookings/:id/deny", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const bookingId = req.params.id 
+        if (typeof bookingId !== "string") {
+            return res.status(400).json({
+                error:"Invalid booking ID."
+            })
+        }
+        const result = await denyBooking(bookingId, req.user)
+        return res.json({
+            success:true,
+            status:"denied"
+        })
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+
+// Receive new Room 
+app.post("/rooms", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const result = await createRoom(req.body, req.user)
+        return res.status(200).json({
+            message:"Room created.",
+            newroom:result
+        })
+    } catch(err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// View Rooms 
+app.get("/rooms", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const result = await getRooms(req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// View a Single Room
+app.get("/rooms/:id", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const roomId = req.params.id 
+        if (typeof roomId !== "string") {
+            return res.status(400).json({
+                error:"Invalid room ID."
+            })
+        }
+        const result = await getRoomSingle(roomId, req.user)
+        return res.json(result)
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// View All Rooms that Meet Requirements
+app.post("/rooms/req", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const result = await getRoomWithRequirements(req.body, req.user)
+        return res.json(result)
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// Edit Room
+app.patch("/rooms/:id", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const roomId = req.params.id 
+        if (typeof roomId !== "string") {
+            return res.status(400).json({
+                error:"Invalid room ID."
+            })
+        }
+        const result = await editRoom(roomId, req.body, req.user)
+        return res.json({
+            success:true
+        })
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// Delete Room 
+app.delete("/rooms/:id", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const roomId = req.params.id 
+        if (typeof roomId !== "string") {
+            return res.status(400).json({
+                error:"Invalid room ID."
+            })
+        }
+        const result = await removeRoom(roomId, req.user)
+        return res.json({
+            success:true
+        })
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+
+// Receive Sign-Up Request
+app.post("/users", authTokenOnly, async (req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const result = await createUser(req.body, req.user)
+        return res.status(200).json({
+            message:"User document created.",
+            result:result
+        })
+    } catch(err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// View Users (Only of same school)
+app.get("/users", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const result = await getUsers(req.user)
+        return res.json(result)
+    } catch (err) {
+        console.log(err.message)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// View a specific user 
+app.get("/users/:id", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+     // Failsafe 
+    try {
+        const userId = req.params.id 
+        if (typeof userId !== "string") {
+            return res.status(400).json({
+                error:"Invalid user ID."
+            })
+        }
+        const result = await getSpecificUser(userId, req.user)
+        return res.json(result)
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+
+// Edit user role / permissions
+app.patch("users/:id", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    // Failsafe 
+    try {
+        const userId = req.params.id 
+        if (typeof userId !== "string") {
+            return res.status(400).json({
+                error:"Invalid user ID."
+            })
+        }
+        const result = await changeUserRole(userId, req.body, req.user)
+        return res.json({
+            success:true
+        })
+    } catch (err) {
+        console.error(err)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+
+// Set our port 
+const PORT = process.env.PORT || 3000
+
+// Set listen to port 
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`)
+})
