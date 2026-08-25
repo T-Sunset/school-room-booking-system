@@ -1,8 +1,8 @@
 <script setup lang="ts">
     // BookingModal.vue
     //Imports
-    import {ref, computed} from 'vue'
-    import type { BookingRequest, PossibleBooking } from '../types/Booking';
+    import {ref} from 'vue'
+    import type { PossibleBooking } from '../types/Booking';
     import type { Room } from '../types/Room';
     import { submitBooking } from '../services/bookingService'
 

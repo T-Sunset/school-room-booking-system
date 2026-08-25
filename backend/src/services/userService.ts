@@ -115,6 +115,30 @@ export async function getUsers(user) {
     }))
 }
 
+export async function getSchoolStudents(user: User) {
+    if (user.role !== "student") {
+        throw new Error("Only students can search for school members.")
+    }
+    if (!user.schoolId) {
+        throw new Error("User is not assigned to a school.")
+    }
+
+    const snapshot = await db
+        .collection("users")
+        .where("schoolId", "==", user.schoolId)
+        .where("role", "==", "student")
+        .get()
+
+    return snapshot.docs.map((doc) => {
+        const data = doc.data() as User
+        return {
+            id: doc.id,
+            email: data.email,
+            yearLevel: data.yearLevel ?? null
+        }
+    })
+}
+
 // View specific user documents
 export async function getSpecificUser(userId:string, user:User) {
     // Ensure Valid Rights

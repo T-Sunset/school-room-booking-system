@@ -99,7 +99,7 @@
 
     // Modal State (create / edit room popup modal)
     const showModal = ref(false)
-    function openModal(room:Room, app:PossibleBooking|null) {
+    function openModal(room:Room) {
         selectedRoom.value = room ?? null
         showModal.value = true
     }
@@ -215,7 +215,7 @@
                             <td>{{ room.name }}</td>
                             <td>
                                 <button class="btn btn-sm btn-secondary me-2" @click="viewRoom(room.id)">View</button>
-                                <button class="btn btn-sm btn-primary" @click="openModal(room,buildPossibleBooking())">Book</button>
+                                <button class="btn btn-sm btn-primary" @click="openModal(room)">Book</button>
                             </td>
                         </tr>
                       </tbody>
