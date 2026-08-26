@@ -10,7 +10,7 @@
     const emit = defineEmits(["close","accept"])
 
     // Define our props--values that we are given by other pages
-    const props = defineProps<{bookingData:PossibleBooking | null, roomData:Room}>()
+    const props = defineProps<{bookingData:PossibleBooking | null, roomData:Room, bandName?:string}>()
 
     // Get our room and booking objects
     const booking = ref<PossibleBooking>({
@@ -98,7 +98,7 @@
                     <div class="row align-items-center mb-3" v-if="booking.bandId">
                         <label for="band" class=" col-sm-4 col-form-label">Band Name: </label>
                         <div class="col-sm-8">
-                            <label id="band">TBA</label>
+                            <label id="band">{{ props.bandName || "Unknown band" }}</label>
                         </div>
                     </div>
 

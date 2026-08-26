@@ -350,10 +350,132 @@ export async function getPendingBookings(user:User) {
     .get()
 
     // Convert data to JSON 
-    return snapshot.docs.map(doc => ({
+    return enrichBookings(snapshot.docs.map(doc => ({
         id:doc.id,
         ...doc.data()
+    } as BookingRequest)))
+}
+
+// Get bookings created by the authenticated user.
+export async function getUserBookings(user:User) {
+    if (!user.id || !user.schoolId) {
+        throw new Error("User is not assigned to a valid school.")
+    }
+
+    const ownBookings = await db
+        .collection("bookings")
+        .where("schoolId", "==", user.schoolId)
+        .where("createdBy", "==", user.id)
+        .orderBy("startTime")
+        .get()
+
+    const bandSnapshot = await db
+        .collection("bands")
+        .where("schoolId", "==", user.schoolId)
+        .where("memberIds", "array-contains", user.id)
+        .get()
+
+    const bandBookings = await Promise.all(bandSnapshot.docs.map((band) => db
+        .collection("bookings")
+        .where("schoolId", "==", user.schoolId)
+        .where("bandId", "==", band.id)
+        .get()))
+
+    const bookings = [...ownBookings.docs, ...bandBookings.flatMap((snapshot) => snapshot.docs)]
+    const uniqueBookings = [...new Map(bookings.map((doc) => [doc.id, doc])).values()]
+
+    return enrichBookings(uniqueBookings
+        .map((doc): BookingRequest => ({
+            id:doc.id,
+            ...doc.data()
+        } as BookingRequest)))
+}
+
+export type RollcallEntry = {
+    bookingId: string,
+    studentId: string,
+    studentEmail: string,
+    roomId: string,
+    roomName: string,
+    bandId?: string,
+    bandName?: string,
+    startTime: string,
+    endTime: string
+}
+
+// Get students currently permitted in the building by approved active bookings.
+export async function getRollcall(user: User): Promise<RollcallEntry[]> {
+    if (user.role !== "teacher" && user.role !== "admin") {
+        throw new Error("Only teachers and administrators can view Rollcall.")
+    }
+    if (!user.schoolId) {
+        throw new Error("User is not assigned to a valid school.")
+    }
+
+    const now = new Date()
+    const snapshot = await db.collection("bookings")
+        .where("schoolId", "==", user.schoolId)
+        .where("status", "==", "approved")
+        .get()
+
+    const activeBookings = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() } as BookingRequest))
+        .filter((booking) => new Date(booking.startTime) <= now && new Date(booking.endTime) > now)
+
+    const entries = await Promise.all(activeBookings.flatMap(async (booking) => {
+        const [roomSnapshot, bandSnapshot] = await Promise.all([
+            db.collection("rooms").doc(booking.roomId).get(),
+            booking.type === "band" && booking.bandId
+                ? db.collection("bands").doc(booking.bandId).get()
+                : Promise.resolve(null)
+        ])
+        const roomName = roomSnapshot.data()?.name || "Room unavailable"
+        const band = bandSnapshot?.data() as { name?: string, status?: string, memberIds?: string[] } | undefined
+        const studentIds = booking.type === "band" && band?.status === "approved"
+            ? band.memberIds || []
+            : booking.type === "solo"
+                ? [booking.createdBy]
+                : []
+
+        return Promise.all(studentIds.map(async (studentId): Promise<RollcallEntry | null> => {
+            const studentSnapshot = await db.collection("users").doc(studentId).get()
+            if (studentSnapshot.data()?.role !== "student") {
+                return null
+            }
+            return {
+                bookingId: booking.id,
+                studentId,
+                studentEmail: studentSnapshot.data()?.email || "Student unavailable",
+                roomId: booking.roomId,
+                roomName,
+                bandId: booking.bandId,
+                bandName: band?.name,
+                startTime: booking.startTime,
+                endTime: booking.endTime
+            }
+        }))
     }))
+
+    return entries.flat().filter((entry): entry is RollcallEntry => entry !== null).sort((first, second) => first.roomName.localeCompare(second.roomName) || first.studentEmail.localeCompare(second.studentEmail))
+}
+
+async function enrichBookings(bookings: BookingRequest[]): Promise<BookingRequest[]> {
+    const enriched = await Promise.all(bookings.map(async (booking) => {
+        const [roomSnapshot, userSnapshot, bandSnapshot] = await Promise.all([
+            db.collection("rooms").doc(booking.roomId).get(),
+            db.collection("users").doc(booking.createdBy).get(),
+            booking.bandId ? db.collection("bands").doc(booking.bandId).get() : Promise.resolve(null)
+        ])
+
+        return {
+            ...booking,
+            roomName: roomSnapshot.data()?.name,
+            requesterEmail: userSnapshot.data()?.email,
+            bandName: bandSnapshot?.data()?.name
+        }
+    }))
+
+    return enriched.sort((first, second) => first.startTime.localeCompare(second.startTime))
 }
 
 // Helper Function: Set a Decision 
