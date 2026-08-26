@@ -2,9 +2,12 @@
     // OneRoomView.vue
     // Imports
     import { useRoute } from 'vue-router';
-    import {ref, onMounted} from 'vue';
+    import {computed, ref, onMounted} from 'vue';
+    import type { PossibleBooking } from '../types/Booking';
     import type { Room } from '../types/Room';
-    import { getRoomSingle } from '../services/roomService';
+    import { getRoomAvailability, getRoomSingle } from '../services/roomService';
+    import type { RoomAvailabilityCell } from '../types/Room';
+    import BookingModal from '../components/BookingModal.vue';
 
     // Get the Room ID selected from the Rooms view
     const route = useRoute() // Use the router
@@ -16,6 +19,10 @@
 
     // Do we have an error?
     const error = ref("")
+    const availability = ref<RoomAvailabilityCell[]>([])
+    const selectedBooking = ref<PossibleBooking | null>(null)
+    const bookingFeedback = ref("")
+    const bookingFeedbackType = ref<"success" | "danger">("success")
 
     // Get number of hours between the opening and closing hour of this room
     const hours : number[] = []
@@ -24,8 +31,15 @@
     onMounted(async () => {
         // Try to fetch the room according to RoomID if possible.
         try {
-            const res = await getRoomSingle(roomId)
-            room.value = res
+            const [res, roomAvailability] = await Promise.all([
+                getRoomSingle(roomId),
+                getRoomAvailability(roomId)
+            ])
+            room.value = {
+                ...res,
+                id: String(roomId)
+            }
+            availability.value = roomAvailability
         } catch (err:any) {
             // Report on any errors if they occur
             console.log(err.response?.data)
@@ -63,6 +77,50 @@
         {label:"Year 11", value:11},
         {label:"Year 12", value:12}
     ]
+
+    const availabilityBySlot = computed(() => new Map(
+        availability.value.map((cell) => [`${cell.day}-${cell.hour}`, cell])
+    ))
+
+    function getCell(day: number, hour: number) {
+        return availabilityBySlot.value.get(`${day}-${hour}`)
+    }
+
+    function getCellStatus(day: number, hour: number) {
+        return getCell(day, hour)?.status || "unavailable"
+    }
+
+    function canBookCell(day: number, hour: number) {
+        const cell = getCell(day, hour)
+        return cell?.status === "available" && new Date(cell.startTime) > new Date()
+    }
+
+    function openCellBooking(day: number, hour: number) {
+        const cell = getCell(day, hour)
+        if (!cell || !canBookCell(day, hour)) return
+
+        selectedBooking.value = {
+            type: "solo",
+            startTime: cell.startTime,
+            endTime: cell.endTime
+        }
+    }
+
+    function closeCellBooking() {
+        selectedBooking.value = null
+    }
+
+    async function handleBookingSuccess() {
+        bookingFeedbackType.value = "success"
+        bookingFeedback.value = "Booking submitted successfully."
+        selectedBooking.value = null
+        availability.value = await getRoomAvailability(roomId)
+    }
+
+    function handleBookingError(message: string) {
+        bookingFeedbackType.value = "danger"
+        bookingFeedback.value = message
+    }
 </script>
 
 <template>
@@ -81,6 +139,7 @@
     
     <!-- Proper Header -->
      <h1 class="mb-4" v-if="!loading && room">{{ room.name }}</h1>
+        <div v-if="bookingFeedback" class="alert" :class="`alert-${bookingFeedbackType}`">{{ bookingFeedback }}</div>
 
     <!-- Header Information Cards -->
      <div class="row mb-4">
@@ -154,8 +213,21 @@
         <tbody>
             <tr v-for="hour in hours" :key="hour">
                 <td>{{ hour }}:00</td>
-                <td v-for="day in days" :key="day.value">Available</td>
+                <td v-for="day in days" :key="day.value">
+                    <div>{{ getCellStatus(day.value, hour) }}</div>
+                    <button v-if="canBookCell(day.value, hour)" type="button" class="btn btn-sm btn-primary mt-1" @click="openCellBooking(day.value, hour)">
+                        Book
+                    </button>
+                </td>
             </tr>
         </tbody>
      </table>
+
+     <BookingModal
+        v-if="room && selectedBooking"
+        :room-data="room"
+        :booking-data="selectedBooking"
+        @close="closeCellBooking"
+        @accept="handleBookingSuccess"
+        @error="handleBookingError" />
 </template>

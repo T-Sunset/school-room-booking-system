@@ -6,6 +6,8 @@ export type Room = {
     name: string,
     nameNormalised:string,
     isBookable: boolean, 
+    isInUse?: boolean,
+    nextAvailable?: string | null,
     rules: {
         maxBookingHours:number,
         requiresApproval: boolean,
@@ -20,4 +22,13 @@ export type Room = {
     },
     createdBy:string,
     createdAt:string
+}
+
+export type RoomAvailabilityCell = {
+    date: string,
+    day: number,
+    hour: number,
+    startTime: string,
+    endTime: string,
+    status: "available" | "booked" | "unavailable"
 }

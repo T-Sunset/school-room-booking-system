@@ -1,6 +1,6 @@
 // roomService.ts
 import api from './api'
-import type { Room } from '../types/Room'
+import type { Room, RoomAvailabilityCell } from '../types/Room'
 import type { PossibleBooking } from '../types/Booking'
 
 // Get Rooms 
@@ -39,4 +39,10 @@ export async function updateRoom(input:Room) {
 
     // Did it work?
     return response.data.success
+}
+
+// Get the current week's hourly availability for a room.
+export async function getRoomAvailability(input:string | string[]): Promise<RoomAvailabilityCell[]> {
+    const response = await api.get(`/rooms/${input}/availability`)
+    return response.data
 }

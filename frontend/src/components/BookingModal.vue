@@ -7,7 +7,7 @@
     import { submitBooking } from '../services/bookingService'
 
     // Define our emits--the outcomes of the modal
-    const emit = defineEmits(["close","accept"])
+    const emit = defineEmits(["close", "accept", "error"])
 
     // Define our props--values that we are given by other pages
     const props = defineProps<{bookingData:PossibleBooking | null, roomData:Room, bandName?:string}>()
@@ -46,6 +46,7 @@
                 emit("accept")
             } catch (err:any) {
                 error.value = err.message
+                emit("error", error.value)
                 console.log(error.value)
             } finally {
                 // If there was no errors...
@@ -64,7 +65,7 @@
         let date = new Date(d)
 
         // Get to legible format 
-        let result = date.toUTCString()
+        let result = date.toLocaleString()
 
         // Return
         return result
@@ -77,6 +78,7 @@
             <div class="card p-4">
                 <!-- Header -->
                  <h4>Making a Booking</h4>
+                 <div v-if="error" class="alert alert-danger">{{ error }}</div>
                     <!-- Booking Details -->
                     <!-- Get the Room's Name -->
                     <div class="row align-items-center mb-3">
