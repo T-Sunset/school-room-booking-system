@@ -15,7 +15,9 @@ export type BookingType = "solo" | "band"
 export type BookingRequest = {
     id: string,
     roomId: string,
+    roomName?: string,
     createdBy:string,
+    requesterEmail?: string,
     type: BookingType,
     bandId?:string,
     bandName?:string,
@@ -50,4 +52,16 @@ export function getStartOfWeek() {
     start.setHours(0,0,0,0)
 
     return start
+}
+
+export interface RollcallEntry {
+    bookingId: string,
+    studentId: string,
+    studentEmail: string,
+    roomId: string,
+    roomName: string,
+    bandId?: string,
+    bandName?: string,
+    startTime: string,
+    endTime: string
 }

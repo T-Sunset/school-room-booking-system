@@ -15,7 +15,9 @@ export type BookingType = "solo" | "band"
 export type BookingRequest = {
     id: string,
     roomId: string,
+    roomName?: string,
     createdBy:string,
+    requesterEmail?: string,
     type: BookingType,
     bandId?:string,
     bandName?:string,

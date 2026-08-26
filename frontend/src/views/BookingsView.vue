@@ -1,36 +1,125 @@
 <script setup lang="ts">
     // BookingsView.vue
     // Imports
-    import {ref, onMounted} from 'vue'
-    import type { PossibleBooking } from '../types/Booking'
+    import {computed, ref, onMounted} from 'vue'
+    import type { BookingRequest, PossibleBooking } from '../types/Booking'
     import type { Room } from '../types/Room'
-    import { getRoomsForBooking } from '../services/roomService'
+    import { approveBooking, denyBooking, getBookings, getPendingBookings } from '../services/bookingService'
+    import { getRooms, getRoomsForBooking } from '../services/roomService'
+    import { getActiveBands, getBandsForUser, getSameSchoolUsers } from '../services/bandService'
+    import { useAuthStore } from '../stores/authStore'
+    import type { Band } from '../types/Band'
     import BookingModal from '../components/BookingModal.vue'
     import { useRouter } from 'vue-router'
 
     // Get Router
     const router = useRouter()
+    const authStore = useAuthStore()
 
     // Get booking parameters
     const bookDate = ref<string>("")
     const bookStartTime = ref<number>(14)
     const bookDuration = ref<number>(1)
     const bookType = ref<"solo" | "band">("solo")
+    const selectedBandId = ref("")
 
     // Get state parameters
     const roomsGenerated = ref(false)
     const loading = ref(false) //Initialise as true 
     const error = ref("")
     const success = ref("")
+    const bands = ref<Band[]>([])
+    const bandsLoading = ref(false)
+    const selectedBandName = computed(() => bands.value.find((band) => band.id === selectedBandId.value)?.name || "")
+    const bookings = ref<BookingRequest[]>([])
+    const roomNames = ref<Record<string, string>>({})
+    const userNames = ref<Record<string, string>>({})
+    const bandNames = ref<Record<string, string>>({})
+    const bookingsLoading = ref(false)
+    const bookingsError = ref("")
+    const pendingBookings = ref<BookingRequest[]>([])
+    const pendingBookingsLoading = ref(false)
+    const pendingBookingsError = ref("")
+    const pendingBookingsSuccess = ref("")
+    const bookingActionId = ref("")
+    const showBookingHistory = ref(false)
+    const bookingSort = ref<"soonest" | "latest">("soonest")
+    const isStaff = authStore.role === "teacher" || authStore.role === "admin"
+    const displayedBookings = computed(() => {
+        const now = new Date()
+        const filtered = bookings.value.filter((booking) => {
+            if (showBookingHistory.value) return true
+            return booking.status !== "denied" && booking.status !== "cancelled" && new Date(booking.endTime) > now
+        })
+
+        return filtered.sort((first, second) => {
+            const firstTime = new Date(first.startTime).getTime()
+            const secondTime = new Date(second.startTime).getTime()
+            return bookingSort.value === "soonest" ? firstTime - secondTime : secondTime - firstTime
+        })
+    })
 
     // Get rooms list 
     const rooms = ref<Room[]>([])
     const selectedRoom = ref<Room|null>()
 
     // Start Function
-    onMounted(()=> {
+    onMounted(async ()=> {
+        if (isStaff) {
+            pendingBookingsLoading.value = true
+            try {
+                const [pending, availableRooms, schoolUsers, activeBands] = await Promise.all([
+                    getPendingBookings(),
+                    getRooms(),
+                    getSameSchoolUsers(),
+                    getActiveBands()
+                ])
+                pendingBookings.value = pending
+                roomNames.value = Object.fromEntries((availableRooms as Room[]).map((room) => [room.id, room.name]))
+                userNames.value = Object.fromEntries(schoolUsers.map((user) => [user.id, user.email]))
+                bandNames.value = Object.fromEntries(activeBands.map((band) => [band.id, band.name]))
+            }
+            catch (err:any) {
+                pendingBookingsError.value = err.response?.data?.error || err.message || "Unable to load pending bookings."
+            }
+            finally {
+                pendingBookingsLoading.value = false
+            }
+            return
+        }
 
+        if (authStore.role !== "student") return
+
+        bandsLoading.value = true
+        bookingsLoading.value = true
+        try {
+            const [userBands, userBookings, availableRooms] = await Promise.all([getBandsForUser(), getBookings(), getRooms()])
+            bands.value = userBands.filter((band) => band.status === "approved")
+            bandNames.value = Object.fromEntries(userBands.map((band) => [band.id, band.name]))
+            bookings.value = userBookings
+            roomNames.value = Object.fromEntries((availableRooms as Room[]).map((room) => [room.id, room.name]))
+        }
+        catch (err:any) {
+            bookingsError.value = err.response?.data?.error || err.message || "Unable to load your bookings."
+        }
+        finally {
+            bandsLoading.value = false
+            bookingsLoading.value = false
+        }
     })
+
+    function handleBookingTypeChange() {
+        if (bookType.value === "solo") selectedBandId.value = ""
+        resetAvailableRooms()
+    }
+
+    function resetAvailableRooms() {
+        rooms.value = []
+        selectedRoom.value = null
+        roomsGenerated.value = false
+        loading.value = false
+        success.value = ""
+    }
 
     // Generate Rooms
     async function generateRooms() {
@@ -43,6 +132,9 @@
             success.value = ""
 
             // Try to generate a roomlist based on our parameters
+            if (bookType.value === "band" && !selectedBandId.value) {
+                throw new Error("Please select a band before finding rooms.")
+            }
             const booking = buildPossibleBooking()
 
             // Is our booking not null?
@@ -89,7 +181,8 @@
             return {
                 type:bookType.value,
                 startTime:startTime.toISOString(),
-                endTime:endTime.toISOString()
+                endTime:endTime.toISOString(),
+                ...(bookType.value === "band" ? { bandId: selectedBandId.value } : {})
             } as PossibleBooking
         }
         catch (err:any) {
@@ -113,6 +206,35 @@
         rooms.value = []
     }
 
+    async function approvePendingBooking(booking: BookingRequest) {
+        await updatePendingBooking(booking, approveBooking, "approved")
+    }
+
+    async function denyPendingBooking(booking: BookingRequest) {
+        if (!window.confirm("Are you sure you want to deny this booking?")) return
+        await updatePendingBooking(booking, denyBooking, "denied")
+    }
+
+    async function updatePendingBooking(booking: BookingRequest, action: (bookingId: string) => Promise<{ status: BookingRequest['status'] }>, status: BookingRequest['status']) {
+        if (bookingActionId.value) return
+        bookingActionId.value = booking.id
+        pendingBookingsError.value = ""
+        pendingBookingsSuccess.value = ""
+        try {
+            const response = await action(booking.id)
+            if (response.status === status) {
+                pendingBookings.value = pendingBookings.value.filter((pending) => pending.id !== booking.id)
+                pendingBookingsSuccess.value = `Booking was ${status}.`
+            }
+        }
+        catch (err:any) {
+            pendingBookingsError.value = err.response?.data?.error || err.message || `Unable to ${status} the booking.`
+        }
+        finally {
+            bookingActionId.value = ""
+        }
+    }
+
     // Load a specific room in Rooms/View
     function viewRoom(roomId:string) {
         router.push(`/rooms/${roomId}`)
@@ -122,6 +244,7 @@
 <template>
     <!-- Header -->
      <h1 class="mb-4">Make a Booking</h1>
+    <div v-if="pendingBookingsSuccess" class="alert alert-success">{{ pendingBookingsSuccess }}</div>
 
     <!-- Content Row -->
      <div class="row g-3 mb-4">
@@ -133,7 +256,7 @@
                    <div class="row align-items-center mb-3">
                         <label for="date" class="col-sm-4 col-form-label">Booking Date: </label>
                         <div class="col-sm-8">
-                            <input v-model="bookDate" id="date" type="date" class="form-control" required/>
+                            <input v-model="bookDate" @input="resetAvailableRooms" id="date" type="date" class="form-control" required/>
                         </div>
                    </div>
 
@@ -141,7 +264,7 @@
                    <div class="row align-items-center mb-3">
                         <label for="starttime" class="col-sm-4 col-form-label">Start Time (24hr): </label>
                         <div class="col-sm-8">
-                            <input v-model="bookStartTime" id="starttime" type="number" min="0" max="23" class="form-control" placeholder="0-23" required/>
+                            <input v-model="bookStartTime" @input="resetAvailableRooms" id="starttime" type="number" min="0" max="23" class="form-control" placeholder="0-23" required/>
                         </div>
                    </div>
 
@@ -149,7 +272,7 @@
                    <div class="row align-items-center mb-3">
                         <label for="duration" class="col-sm-4 col-form-label">Duration (Hours): </label>
                         <div class="col-sm-8">
-                            <input v-model="bookDuration" id="duration" type="number" min="1" max="24" class="form-control" placeholder="1-24" required/>
+                            <input v-model="bookDuration" @input="resetAvailableRooms" id="duration" type="number" min="1" max="24" class="form-control" placeholder="1-24" required/>
                         </div>
                    </div>
 
@@ -157,7 +280,7 @@
                    <div class="row align-items-center mb-3">
                         <label for="bookType" class="col-sm-4 col-form-label">Booking Type: </label>
                         <div class="col-sm-8">
-                            <select id="bookType" class="form-select" v-model="bookType" required>
+                            <select id="bookType" class="form-select" v-model="bookType" @change="handleBookingTypeChange" required>
                                 <option value="solo">Solo</option>
                                 <option value="band">Band</option>
                             </select>
@@ -168,9 +291,11 @@
                     <div class="row align-items-center mb-3" v-if="bookType === 'band'">
                         <label for="bookBand" class="col-sm-4 col-form-label">Band: </label>
                         <div class="col-sm-8">
-                            <select id="bookBand" class="form-select" required>
-                                <option value="solo">Select a Band...</option>
+                            <select id="bookBand" class="form-select" v-model="selectedBandId" @change="resetAvailableRooms" :disabled="bandsLoading || bands.length === 0" required>
+                                <option value="" disabled>{{ bandsLoading ? "Loading bands..." : "Select a Band..." }}</option>
+                                <option v-for="band in bands" :key="band.id" :value="band.id">{{ band.name }}</option>
                             </select>
+                            <small v-if="!bandsLoading && bands.length === 0" class="text-muted">You have no approved bands available for booking.</small>
                         </div>
                    </div>
 
@@ -225,5 +350,88 @@
      </div>
 
     <!-- Booking Modal -->
-    <BookingModal v-if="selectedRoom && buildPossibleBooking() && rooms.length > 0" @close="closeModal" @accept="getSuccess" :room-data="selectedRoom" :booking-data="buildPossibleBooking()"/>
+    <BookingModal v-if="selectedRoom && buildPossibleBooking() && rooms.length > 0" @close="closeModal" @accept="getSuccess" :room-data="selectedRoom" :booking-data="buildPossibleBooking()" :band-name="selectedBandName"/>
+
+        <section v-if="authStore.role === 'student'" class="mt-4">
+            <h2 class="h4 mb-3">My Bookings</h2>
+            <div v-if="bookingsError" class="alert alert-danger">{{ bookingsError }}</div>
+            <div v-else-if="bookingsLoading" class="card p-3">Loading your bookings...</div>
+            <div v-else class="card p-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div class="form-check">
+                        <input id="showBookingHistory" v-model="showBookingHistory" type="checkbox" class="form-check-input">
+                        <label for="showBookingHistory" class="form-check-label">Show booking history</label>
+                    </div>
+                    <label for="bookingSort" class="visually-hidden">Sort bookings</label>
+                    <select id="bookingSort" v-model="bookingSort" class="form-select" style="max-width: 12rem">
+                        <option value="soonest">Soonest first</option>
+                        <option value="latest">Latest first</option>
+                    </select>
+                </div>
+
+                <div v-if="displayedBookings.length === 0" class="text-muted">
+                    {{ showBookingHistory ? 'You have no bookings.' : 'You have no upcoming bookings.' }}
+                </div>
+                <div v-else class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Room</th>
+                                <th>Band Name</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="booking in displayedBookings" :key="booking.id">
+                                <td>{{ booking.type === 'band' ? 'Band' : 'Solo' }}</td>
+                                <td>{{ booking.roomName || roomNames[booking.roomId] || "Room unavailable" }}</td>
+                                <td>{{ booking.type === 'band' ? (bandNames[booking.bandId || ''] || "Band unavailable") : "-" }}</td>
+                                <td>{{ new Date(booking.startTime).toLocaleString() }}</td>
+                                <td>{{ new Date(booking.endTime).toLocaleString() }}</td>
+                                <td class="text-capitalize">{{ booking.status }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section v-if="isStaff" class="mt-4">
+            <h2 class="h4 mb-3">Pending Bookings</h2>
+            <div v-if="pendingBookingsError" class="alert alert-danger">{{ pendingBookingsError }}</div>
+            <div v-else-if="pendingBookingsLoading" class="card p-3">Loading pending bookings...</div>
+            <div v-else-if="pendingBookings.length === 0" class="card p-3 text-muted">There are no pending bookings.</div>
+            <div v-else class="card p-3 table-responsive">
+                <table class="table table-striped align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Room</th>
+                            <th>Student/Band</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="booking in pendingBookings" :key="booking.id">
+                            <td>{{ booking.type === 'band' ? 'Band' : 'Solo' }}</td>
+                            <td>{{ booking.roomName || roomNames[booking.roomId] || "Room unavailable" }}</td>
+                            <td>{{ booking.type === 'band' ? (booking.bandName || bandNames[booking.bandId || ''] || 'Band unavailable') : (booking.requesterEmail || userNames[booking.createdBy] || 'Student unavailable') }}</td>
+                            <td>{{ new Date(booking.startTime).toLocaleString() }}</td>
+                            <td>{{ new Date(booking.endTime).toLocaleString() }}</td>
+                            <td class="text-capitalize">{{ booking.status }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-success me-2" :disabled="bookingActionId !== ''" @click="approvePendingBooking(booking)">Approve</button>
+                                <button class="btn btn-sm btn-danger" :disabled="bookingActionId !== ''" @click="denyPendingBooking(booking)">Deny</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 </template>

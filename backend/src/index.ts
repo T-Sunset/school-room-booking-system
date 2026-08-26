@@ -1,7 +1,7 @@
 // index.ts
 import express, {Request, Response} from "express"
 import cors from "cors"
-import {approveBooking, createBooking, denyBooking, getPendingBookings} from "./services/bookingService"
+import {approveBooking, createBooking, denyBooking, getPendingBookings, getRollcall, getUserBookings} from "./services/bookingService"
 import { createBand, approveBand, denyBand, disbandBand, getActiveBands, getBandsForUser, getPendingBands, leaveBand } from "./services/bandService"
 import { authMiddleware, authTokenOnly } from "./middleware/authMiddleware"
 import { AuthenticatedRequest } from "./types/auth"
@@ -403,6 +403,26 @@ app.patch("/bands/:id/leave", authMiddleware, async(req:AuthenticatedRequest, re
             return res.status(400).json({ error:"Invalid band ID." })
         }
         const result = await leaveBand(bandId, req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
+})
+// View bookings created by the authenticated user
+app.get("/bookings/mine", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const result = await getUserBookings(req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// View the authoritative current building Rollcall for staff
+app.get("/rollcall", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const result = await getRollcall(req.user)
         return res.json(result)
     } catch (err) {
         return res.status(400).json({ error:err.message })
