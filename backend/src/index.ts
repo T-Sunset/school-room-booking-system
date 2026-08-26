@@ -2,11 +2,11 @@
 import express, {Request, Response} from "express"
 import cors from "cors"
 import {approveBooking, createBooking, denyBooking, getPendingBookings} from "./services/bookingService"
-import { createBand, approveBand, denyBand, getPendingBands } from "./services/bandService"
+import { createBand, approveBand, denyBand, disbandBand, getActiveBands, getBandsForUser, getPendingBands, leaveBand } from "./services/bandService"
 import { authMiddleware, authTokenOnly } from "./middleware/authMiddleware"
 import { AuthenticatedRequest } from "./types/auth"
 import { createRoom, editRoom, getRooms, getRoomSingle, getRoomWithRequirements, removeRoom } from "./services/roomService"
-import { changeUserRole, createUser, getSpecificUser, getUsers } from "./services/userService"
+import { changeUserRole, createUser, getSchoolStudents, getSpecificUser, getUsers } from "./services/userService"
 
 // Set up the Express app and middleware
 const app = express()
@@ -288,6 +288,18 @@ app.post("/users", authTokenOnly, async (req:AuthenticatedRequest, res:Response)
         })
     }
 })
+// View a student-safe, same-school roster for member selection
+app.get("/students", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const result = await getSchoolStudents(req.user)
+        return res.json(result)
+    } catch (err) {
+        console.log(err.message)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
 // View Users (Only of same school)
 app.get("/users", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
     // Failsafe 
@@ -349,4 +361,50 @@ const PORT = process.env.PORT || 3000
 // Set listen to port 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
+})
+// View bands for the authenticated user
+app.get("/bands/mine", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const result = await getBandsForUser(req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
+// View active approved bands in the authenticated user's permitted scope
+app.get("/bands/active", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const result = await getActiveBands(req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
+})
+// Disband an approved band
+app.patch("/bands/:id/disband", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const bandId = req.params.id
+        if (typeof bandId !== "string") {
+            return res.status(400).json({ error:"Invalid band ID." })
+        }
+        const result = await disbandBand(bandId, req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
+})
+// Leave an approved band as a student member
+app.patch("/bands/:id/leave", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const bandId = req.params.id
+        if (typeof bandId !== "string") {
+            return res.status(400).json({ error:"Invalid band ID." })
+        }
+        const result = await leaveBand(bandId, req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
 })

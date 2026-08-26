@@ -1,6 +1,6 @@
 <script setup lang="ts">
     // RoomsView.vue
-    import { ref, onMounted, computed } from 'vue';
+    import { ref, onMounted } from 'vue';
     import type { Room } from '../types/Room';
     import { getRooms } from '../services/roomService';
     import { useAuthStore } from '../stores/authStore';
@@ -118,7 +118,7 @@
 
     <!-- Add Room Button -->
      <!-- FOR TESTING PURPOSES, THIS IS SET TO NOT-ADMINS. CHANGE!! -->
-     <div class="d-flex justify-content-end align-items-end mt-3" v-if="authStore.role !== 'admin'">
+    <div class="d-flex justify-content-end align-items-end mt-3" v-if="authStore.role === 'admin'">
         <div class="card shadow-sm"  style="width:12rem">
             <button class="btn btn-lg btn-success" @click="openRoomModal()">
                 + Add Room

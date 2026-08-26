@@ -5,9 +5,11 @@
   import { useRouter } from 'vue-router';
   import { onAuthStateChanged } from 'firebase/auth';
   import {ref, onMounted} from "vue"
+  import { useAuthStore } from './stores/authStore';
 
   // Get router
   const router = useRouter()
+  const authStore = useAuthStore()
 
   // Get whether or not we're logged in as a reactive variable
   const loggedIn = ref(false) // False by default
@@ -39,8 +41,9 @@
 
       <router-link to="/" class="d-block text-white mb-2">Dashboard</router-link>
       <router-link to="/bookings" class="d-block text-white mb-2">Bookings</router-link>
+      <router-link to="/bands" class="d-block text-white mb-2">Bands</router-link>
       <router-link to="/rooms" class="d-block text-white mb-2">Rooms</router-link>
-      <router-link to="/admin" class="d-block text-white mb-2">Admin</router-link>
+      <router-link to="/admin" class="d-block text-white mb-2" v-if="authStore.role === 'admin' || authStore.role === 'teacher'">Admin</router-link>
       <button @click="try_logout" v-if="loggedIn">Logout</button>
     </aside>
 

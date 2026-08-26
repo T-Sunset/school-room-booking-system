@@ -56,19 +56,15 @@ export async function signUp(email:string, password:string, yearLevel:number) {
         await waitForAuth()
 
         // Get our user token
-        const token = await user.getIdToken(true)
-
         // Query back-end to register our user with a new user document within the database
         const response = await api.post("/users", {yearLevel})
         console.log("Response: ", response.data)
 
          // Query database and get user (GET users/:id)
         const uid = user.uid
-        const secondResponse = await api.get(`/users/${uid}`)
-
         // Apply to Pinia Auth store
         const authStore = useAuthStore()
-        authStore.setUser({uid, email, role:response.data.role, yearLevel})
+        authStore.setUser({uid, email, role:response.data.result.role, yearLevel})
     } catch (err:any) {
         console.log("Sign-up failed: ", err.response?.data || err.message)
     }
