@@ -5,7 +5,7 @@ import {approveBooking, createBooking, denyBooking, getPendingBookings, getRollc
 import { createBand, approveBand, denyBand, disbandBand, getActiveBands, getBandsForUser, getPendingBands, leaveBand } from "./services/bandService"
 import { authMiddleware, authTokenOnly } from "./middleware/authMiddleware"
 import { AuthenticatedRequest } from "./types/auth"
-import { createRoom, editRoom, getRooms, getRoomSingle, getRoomWithRequirements, removeRoom } from "./services/roomService"
+import { createRoom, editRoom, getRooms, getRoomAvailability, getRoomSingle, getRoomWithRequirements, removeRoom } from "./services/roomService"
 import { changeUserRole, createUser, getSchoolStudents, getSpecificUser, getUsers } from "./services/userService"
 
 // Set up the Express app and middleware
@@ -195,6 +195,19 @@ app.get("/rooms", authMiddleware, async (req:AuthenticatedRequest, res:Response)
         return res.status(400).json({
             error:err.message
         })
+    }
+})
+// View weekly availability for a room
+app.get("/rooms/:id/availability", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    try {
+        const roomId = req.params.id
+        if (typeof roomId !== "string") {
+            return res.status(400).json({ error:"Invalid room ID." })
+        }
+        const result = await getRoomAvailability(roomId, req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
     }
 })
 // View a Single Room

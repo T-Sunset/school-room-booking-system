@@ -57,6 +57,16 @@
     function viewRoom(roomId:string) {
         router.push(`/rooms/${roomId}`)
     }
+
+    function getRoomStatus(room: Room) {
+        if (!room.isBookable) return "Unavailable"
+        return room.isInUse ? "In use" : "Available"
+    }
+
+    function formatNextAvailable(room: Room) {
+        if (!room.isBookable || !room.nextAvailable) return "Unavailable"
+        return new Date(room.nextAvailable).toLocaleString()
+    }
 </script>
 
 <template>
@@ -81,7 +91,6 @@
             <thead>
                 <tr>
                     <th>Room Name</th>
-                    <th>Room Capacity</th>
                     <th>Room Status</th>
                     <th>Next Available</th>
                     <th>Actions</th>
@@ -92,9 +101,8 @@
              <tbody>
                 <tr v-for="room in rooms" :key="room.id">
                     <td>{{ room.name }}</td>
-                    <td>[CAPACITY HERE]</td>
-                    <td>[IS BOOKED CURRENTLY?]</td>
-                    <td>[GET NEXT AVAIL. TIME HERE]</td>
+                    <td>{{ getRoomStatus(room) }}</td>
+                    <td>{{ formatNextAvailable(room) }}</td>
                     <td>
                         <button class="btn btn-sm btn-primary me-2" @click="viewRoom(room.id)">
                             View
