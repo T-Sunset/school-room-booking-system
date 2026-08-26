@@ -3,6 +3,7 @@ export type BandStatus =
     | "pending"
     | "approved"
     | "denied"
+    | "disbanded"
 
 export type Band = {
     id:string,
@@ -14,5 +15,6 @@ export type Band = {
     status: BandStatus,
     createdAt: string,
     approvedBy?:string,
-    approvedAt?:string
+    approvedAt?:string,
+    disbandedAt?:string
 }

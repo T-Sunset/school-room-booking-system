@@ -9,16 +9,17 @@
     const statusLabels: Record<Band['status'], string> = {
         pending: 'Pending',
         approved: 'Approved',
-        denied: 'Denied'
+        denied: 'Denied',
+        disbanded: 'Disbanded'
     }
 </script>
 
 <template>
-    <div class="card h-100">
+    <div class="card">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                 <h5 class="card-title mb-0">{{ props.band.name }}</h5>
-                <span class="badge" :class="`text-bg-${props.band.status === 'pending' ? 'warning' : props.band.status === 'approved' ? 'success' : 'danger'}`">
+                <span class="badge" :class="`text-bg-${props.band.status === 'pending' ? 'warning' : props.band.status === 'approved' ? 'success' : props.band.status === 'disbanded' ? 'secondary' : 'danger'}`">
                     {{ statusLabels[props.band.status] }}
                 </span>
             </div>

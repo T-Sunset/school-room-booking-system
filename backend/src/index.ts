@@ -2,7 +2,7 @@
 import express, {Request, Response} from "express"
 import cors from "cors"
 import {approveBooking, createBooking, denyBooking, getPendingBookings} from "./services/bookingService"
-import { createBand, approveBand, denyBand, getBandsForUser, getPendingBands } from "./services/bandService"
+import { createBand, approveBand, denyBand, disbandBand, getActiveBands, getBandsForUser, getPendingBands, leaveBand } from "./services/bandService"
 import { authMiddleware, authTokenOnly } from "./middleware/authMiddleware"
 import { AuthenticatedRequest } from "./types/auth"
 import { createRoom, editRoom, getRooms, getRoomSingle, getRoomWithRequirements, removeRoom } from "./services/roomService"
@@ -371,5 +371,40 @@ app.get("/bands/mine", authMiddleware, async(req:AuthenticatedRequest, res:Respo
         return res.status(400).json({
             error:err.message
         })
+    }
+})
+// View active approved bands in the authenticated user's permitted scope
+app.get("/bands/active", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const result = await getActiveBands(req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
+})
+// Disband an approved band
+app.patch("/bands/:id/disband", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const bandId = req.params.id
+        if (typeof bandId !== "string") {
+            return res.status(400).json({ error:"Invalid band ID." })
+        }
+        const result = await disbandBand(bandId, req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
+})
+// Leave an approved band as a student member
+app.patch("/bands/:id/leave", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const bandId = req.params.id
+        if (typeof bandId !== "string") {
+            return res.status(400).json({ error:"Invalid band ID." })
+        }
+        const result = await leaveBand(bandId, req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
     }
 })

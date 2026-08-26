@@ -1,6 +1,6 @@
 // Band.ts
 
-export type BandStatus = "pending" | "approved" | "denied"
+export type BandStatus = "pending" | "approved" | "denied" | "disbanded"
 
 export interface Band {
     id: string,
@@ -12,7 +12,8 @@ export interface Band {
     status: BandStatus,
     createdAt: string,
     approvedBy?: string,
-    approvedAt?: string
+    approvedAt?: string,
+    disbandedAt?: string
 }
 
 export interface SchoolStudent {

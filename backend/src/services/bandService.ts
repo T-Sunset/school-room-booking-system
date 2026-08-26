@@ -139,13 +139,16 @@ export async function createBand(input: Partial<Band>, user: User) {
     await db.runTransaction(async (transaction) => {
         const schoolBands = await transaction.get(db.collection("bands").where("schoolId", "==", schoolId))
 
-        if (schoolBands.docs.some((doc) => (doc.data() as Band).nameNormalised === nameNormalised)) {
+        if (schoolBands.docs.some((doc) => {
+            const band = doc.data() as Band
+            return band.status !== "denied" && band.status !== "disbanded" && band.nameNormalised === nameNormalised
+        })) {
             throw new Error("Band with that name already exists.")
         }
 
         const duplicateMembers = schoolBands.docs.some((doc) => {
             const band = doc.data() as Band
-            return hasSameMembers(band.memberIds ?? [], validMemberIds)
+            return band.status !== "denied" && band.status !== "disbanded" && hasSameMembers(band.memberIds ?? [], validMemberIds)
         })
 
         if (duplicateMembers) {
@@ -261,5 +264,101 @@ export async function getBandsForUser(user: User) {
             ...doc.data()
         } as Band))
         .sort((first, second) => first.createdAt.localeCompare(second.createdAt))
+}
+
+// Get active approved bands for the authenticated user's permitted scope.
+export async function getActiveBands(user: User) {
+    if (!user.id || !user.schoolId) {
+        throw new Error("User is not assigned to a valid school.")
+    }
+
+    const query = db.collection("bands")
+        .where("schoolId", "==", user.schoolId)
+        .where("status", "==", "approved")
+
+    const snapshot = user.role === "student"
+        ? await query.where("memberIds", "array-contains", user.id).get()
+        : canApproveBooking(user.role)
+            ? await query.get()
+            : null
+
+    if (snapshot === null) {
+        throw new Error("Unauthorised to view active bands.")
+    }
+
+    return snapshot.docs
+        .map((doc): Band => ({
+            id: doc.id,
+            ...doc.data()
+        } as Band))
+        .sort((first, second) => first.name.localeCompare(second.name))
+}
+
+// Disband an approved band with staff or creator authorization.
+export async function disbandBand(bandId: string, user: User) {
+    if (!user.id || !user.schoolId) {
+        throw new Error("User is not assigned to a valid school.")
+    }
+
+    const ref = db.collection("bands").doc(bandId)
+    const snap = await ref.get()
+    if (!snap.exists) {
+        throw new Error("Band not found.")
+    }
+
+    const band = snap.data() as Band
+    if (band.status !== "approved") {
+        throw new Error("Only approved bands can be disbanded.")
+    }
+    if (band.schoolId !== user.schoolId) {
+        throw new Error("Unauthorised to disband a band from another school.")
+    }
+
+    const isStaff = user.role === "teacher" || user.role === "admin"
+    const isCreatorMember = user.role === "student" && band.createdBy === user.id && band.memberIds.includes(user.id)
+    if (!isStaff && !isCreatorMember) {
+        throw new Error("Only staff or the band creator can disband this band.")
+    }
+
+    const disbandedAt = new Date().toISOString()
+    await ref.update({ status: "disbanded", disbandedAt })
+    return { status: "disbanded" as const }
+}
+
+// Leave an approved band as a non-creator student.
+export async function leaveBand(bandId: string, user: User) {
+    if (user.role !== "student" || !user.id || !user.schoolId) {
+        throw new Error("Only students can leave bands.")
+    }
+
+    const ref = db.collection("bands").doc(bandId)
+    const snap = await ref.get()
+    if (!snap.exists) {
+        throw new Error("Band not found.")
+    }
+
+    const band = snap.data() as Band
+    if (band.status !== "approved") {
+        throw new Error("Only approved bands can be left.")
+    }
+    if (band.schoolId !== user.schoolId || !band.memberIds.includes(user.id)) {
+        throw new Error("You are not a member of this band.")
+    }
+    if (band.createdBy === user.id) {
+        throw new Error("The band creator must disband the band instead of leaving it.")
+    }
+
+    const remainingMembers = band.memberIds.filter((memberId) => memberId !== user.id)
+    const update: { memberIds: string[], status?: "disbanded", disbandedAt?: string } = {
+        memberIds: remainingMembers
+    }
+
+    if (remainingMembers.length <= 1) {
+        update.status = "disbanded"
+        update.disbandedAt = new Date().toISOString()
+    }
+
+    await ref.update(update)
+    return { status: update.status ?? "approved" as const }
 }
 
