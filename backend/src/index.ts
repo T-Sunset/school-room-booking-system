@@ -355,13 +355,6 @@ app.patch("users/:id", authMiddleware, async(req:AuthenticatedRequest, res:Respo
     }
 })
 
-// Set our port 
-const PORT = process.env.PORT || 3000
-
-// Set listen to port 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`)
-})
 // View bands for the authenticated user
 app.get("/bands/mine", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
     try {
@@ -427,4 +420,12 @@ app.get("/rollcall", authMiddleware, async(req:AuthenticatedRequest, res:Respons
     } catch (err) {
         return res.status(400).json({ error:err.message })
     }
+})
+
+// Set our port 
+const PORT = process.env.PORT || 3000
+
+// Set listen to port 
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`)
 })

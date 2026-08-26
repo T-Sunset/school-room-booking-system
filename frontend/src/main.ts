@@ -8,6 +8,7 @@ import 'bootstrap'
 
 // Pinia -- State Management between Components 
 import { createPinia } from 'pinia'
+import { hydrateCurrentUser } from './services/userService'
 
 // Page routing 
 import router from './router'
@@ -15,9 +16,14 @@ import router from './router'
 // Create the Vue app
 const app = createApp(App)
 
-// Apply Pinia & Router 
-app.use(createPinia())
-app.use(router)
+// Restore the user profile before mounting role-dependent pages.
+const pinia = createPinia()
+app.use(pinia)
 
-// Mount that bad boi
-app.mount('#app')
+async function startApp() {
+	await hydrateCurrentUser()
+	app.use(router)
+	app.mount('#app')
+}
+
+startApp()

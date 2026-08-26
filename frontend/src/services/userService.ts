@@ -3,6 +3,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, setPersiste
 import { auth } from "../firebase";
 import api from "./api";
 import { useAuthStore } from "../stores/authStore";
+import type { User as FirebaseUser } from "firebase/auth";
 
 // Actual Login function; Error handling in callers
 export async function login(rememberMe:boolean, email:string, password:string) {
@@ -36,12 +37,31 @@ export function isLoggedIn() {
 
 
 // Await Firebase to confirm whether or not we're already logged in before each router page
-export async function waitForAuth() {
+export async function waitForAuth(): Promise<FirebaseUser | null> {
     return new Promise((resolve) => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             unsubscribe()
             resolve(user)
         })
+    })
+}
+
+// Restore the authenticated user's profile after a full page refresh.
+export async function hydrateCurrentUser() {
+    const user = await waitForAuth()
+    const authStore = useAuthStore()
+
+    if (!user) {
+        authStore.clearUser()
+        return
+    }
+
+    const response = await api.get(`/users/${user.uid}`)
+    authStore.setUser({
+        uid: user.uid,
+        email: user.email || "",
+        role: response.data.role,
+        yearLevel: response.data.yearLevel
     })
 }
 
