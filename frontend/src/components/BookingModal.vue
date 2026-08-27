@@ -45,7 +45,7 @@
                 // Emit a success attempt
                 emit("accept")
             } catch (err:any) {
-                error.value = err.message
+                error.value = err.response?.data?.error || err.response?.data?.message || err.message
                 emit("error", error.value)
                 console.log(error.value)
             } finally {
