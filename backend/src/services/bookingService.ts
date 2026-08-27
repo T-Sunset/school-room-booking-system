@@ -5,6 +5,7 @@ import type { Room } from "../models/Room"
 import { RULES } from "../models/Rules"
 import { canApproveBooking, canCreateBooking } from "../rbac/can"
 import type { User } from "../models/User"
+import { getStudentStrikeStatus } from "./strikeService"
 
 // Create a booking 
 export async function createBooking(input: {room:Room, app:PossibleBooking}, user:User) {
@@ -42,6 +43,15 @@ export async function createBooking(input: {room:Room, app:PossibleBooking}, use
 
     // Is the booker a student? If so, go through validation.
     if (user.role === "student") {
+        if (typeof user.schoolId !== "string" || !user.schoolId.trim()) {
+            throw new Error("User is not assigned to a valid school.")
+        }
+
+        const strikeStatus = await getStudentStrikeStatus(user.id, user.schoolId)
+        if (strikeStatus.isBanned) {
+            throw new Error(`You are still banned until ${strikeStatus.banExpiresAt} and cannot make new bookings.`)
+        }
+
         // Is the room bookable?
         if (!room.isBookable) {
             throw new Error("Room is not bookable.")

@@ -12,3 +12,6 @@ export function canApproveBooking(role: UserRole) {
 export function canOverrideRules(role: UserRole) {
     return permissions[role].overrideRules
 }
+export function canManageStudents(role: UserRole) {
+    return permissions[role].manageStudents
+}
