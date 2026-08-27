@@ -6,7 +6,8 @@ import { createBand, approveBand, denyBand, disbandBand, getActiveBands, getBand
 import { authMiddleware, authTokenOnly } from "./middleware/authMiddleware"
 import { AuthenticatedRequest } from "./types/auth"
 import { createRoom, editRoom, getRooms, getRoomAvailability, getRoomSingle, getRoomWithRequirements, removeRoom } from "./services/roomService"
-import { changeUserRole, createUser, getSchoolStudents, getSpecificUser, getUsers } from "./services/userService"
+import { changeUserRole, createUser, getSchoolStudents, getStudentRoster, getSpecificUser, getUsers } from "./services/userService"
+import { getStudentStrikeStatus, issueBandStrike, issueStrike } from "./services/strikeService"
 
 // Set up the Express app and middleware
 const app = express()
@@ -313,6 +314,17 @@ app.get("/students", authMiddleware, async(req:AuthenticatedRequest, res:Respons
         })
     }
 })
+app.get("/students/roster", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const result = await getStudentRoster(req.user)
+        return res.json(result)
+    } catch (err) {
+        console.log(err.message)
+        return res.status(400).json({
+            error:err.message
+        })
+    }
+})
 // View Users (Only of same school)
 app.get("/users", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
     // Failsafe 
@@ -324,6 +336,54 @@ app.get("/users", authMiddleware, async(req:AuthenticatedRequest, res:Response) 
         return res.status(400).json({
             error:err.message
         })
+    }
+})
+
+app.post("/strikes", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const { userId, reason } = req.body
+        if (typeof userId !== "string" || !userId.trim() || typeof reason !== "string" || !reason.trim()) {
+            return res.status(400).json({ error:"userId and reason are required." })
+        }
+
+        const result = await issueStrike(userId, reason, req.user)
+        return res.json(result)
+    } catch (err) {
+        console.log(err.message)
+        return res.status(400).json({ error:err.message })
+    }
+})
+
+app.post("/bands/:id/strike", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const bandId = req.params.id
+        const { reason } = req.body
+        if (typeof bandId !== "string" || !bandId.trim()) {
+            return res.status(400).json({ error:"Invalid band ID." })
+        }
+        if (typeof reason !== "string" || !reason.trim()) {
+            return res.status(400).json({ error:"A reason is required to issue a strike." })
+        }
+
+        const result = await issueBandStrike(bandId, reason, req.user)
+        return res.json(result)
+    } catch (err) {
+        console.log(err.message)
+        return res.status(400).json({ error:err.message })
+    }
+})
+
+app.get("/strikes/mine", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        if (typeof req.user.schoolId !== "string" || !req.user.schoolId.trim()) {
+            return res.status(400).json({ error:"User is not assigned to a valid school." })
+        }
+
+        const result = await getStudentStrikeStatus(req.user.id, req.user.schoolId)
+        return res.json(result)
+    } catch (err) {
+        console.log(err.message)
+        return res.status(400).json({ error:err.message })
     }
 })
 // View a specific user 

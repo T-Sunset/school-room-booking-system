@@ -5,6 +5,7 @@
     import { getStartOfWeek } from '../types/Booking'
     import type { Room } from '../types/Room'
     import { getRooms } from '../services/roomService'
+    import { useAuthStore } from '../stores/authStore'
 
     // Declare variables 
     // Booking Related
@@ -24,6 +25,7 @@
     // Rooms Related 
     let rooms = ref<Room[]>([])
     const roomCount = computed(() => {return rooms.value.length})
+    const authStore = useAuthStore()
 
     // OnMounted() is equivalent to our _ready() or Start() functions. Runs on mount 
     onMounted(async() => {
@@ -71,6 +73,13 @@
 <template>
     <div>
         <h1 class="mb-4">Dashboard</h1>
+
+        <div v-if="authStore.role === 'student' && authStore.strikeStatus.isBanned" class="alert alert-danger" role="alert">
+            You are currently banned from making new bookings until {{ new Date(authStore.strikeStatus.banExpiresAt as string).toLocaleString() }}.
+        </div>
+        <div v-else-if="authStore.role === 'student' && authStore.strikeStatus.hasWarning" class="alert alert-warning" role="alert">
+            You have received a strike. This is currently a warning; you are not banned from making bookings.
+        </div>
 
         <!-- Top Row -->
         <div class="row g-3 mb-4">

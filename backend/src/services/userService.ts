@@ -2,8 +2,10 @@
 import { isNumberObject } from "node:util/types"
 import { db } from "../config/firebase"
 import { User } from "../models/User"
-import { canCreateBooking, canApproveBooking, canOverrideRules } from "../rbac/can"
+import { canCreateBooking, canApproveBooking, canOverrideRules, canManageStudents } from "../rbac/can"
 import { UserRole } from "../models/User"
+import { getStrikeStatusFromStrikes } from "./strikeService"
+import type { Strike } from "../models/Strike"
 
 // Get a User by their UID from firebase firestore 
 export async function getUserById(uid:string): Promise<User|null> {
@@ -135,6 +137,43 @@ export async function getSchoolStudents(user: User) {
             id: doc.id,
             email: data.email,
             yearLevel: data.yearLevel ?? null
+        }
+    })
+}
+
+export async function getStudentRoster(user: User) {
+    if (typeof user.schoolId !== "string" || !user.schoolId.trim()) {
+        throw new Error("User is not assigned to a valid school.")
+    }
+    if (!canManageStudents(user.role)) {
+        throw new Error("Unauthorised to view the student roster.")
+    }
+
+    const snapshot = await db
+        .collection("users")
+        .where("schoolId", "==", user.schoolId)
+        .where("role", "==", "student")
+        .get()
+
+    const strikesSnapshot = await db
+        .collection("strikes")
+        .where("schoolId", "==", user.schoolId)
+        .get()
+    const strikesByUserId = new Map<string, Strike[]>()
+    strikesSnapshot.docs.forEach((doc) => {
+        const strike = { ...doc.data(), id: doc.id } as Strike
+        const userStrikes = strikesByUserId.get(strike.userId) ?? []
+        userStrikes.push(strike)
+        strikesByUserId.set(strike.userId, userStrikes)
+    })
+
+    return snapshot.docs.map((doc) => {
+        const data = doc.data() as User
+        return {
+            id: doc.id,
+            email: data.email,
+            yearLevel: data.yearLevel ?? null,
+            strikeStatus: getStrikeStatusFromStrikes(strikesByUserId.get(doc.id) ?? [])
         }
     })
 }

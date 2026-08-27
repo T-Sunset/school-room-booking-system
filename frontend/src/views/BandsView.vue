@@ -2,7 +2,7 @@
     import { computed, onMounted, ref } from 'vue'
     import BandCard from '../components/BandCard.vue'
     import BandCreateModal from '../components/BandCreateModal.vue'
-    import { approveBand, denyBand, disbandBand, getActiveBands, getBandsForUser, getPendingBands, getSameSchoolStudents, getSameSchoolUsers, leaveBand } from '../services/bandService'
+    import { approveBand, denyBand, disbandBand, getActiveBands, getBandsForUser, getPendingBands, getSameSchoolStudents, getSameSchoolUsers, leaveBand, strikeBand } from '../services/bandService'
     import { useAuthStore } from '../stores/authStore'
     import type { Band } from '../types/Band'
 
@@ -77,6 +77,29 @@
         await updateActiveBand(band, leaveBand)
     }
 
+    async function strike(band: Band) {
+        const reason = window.prompt(`Reason for issuing strikes to ${band.name}:`)
+        if (reason === null) return
+        if (!reason.trim()) {
+            error.value = 'A reason is required to issue a strike.'
+            return
+        }
+        if (actionBandId.value) return
+
+        actionBandId.value = band.id
+        error.value = ''
+        success.value = ''
+        try {
+            await strikeBand(band.id, reason.trim())
+            activeBands.value = await getActiveBands()
+            success.value = `Strike issued to all members of ${band.name}.`
+        } catch (err: any) {
+            error.value = err.response?.data?.error || err.message || 'Unable to issue strikes to the band.'
+        } finally {
+            actionBandId.value = ''
+        }
+    }
+
     async function updateActiveBand(band: Band, action: (bandId: string) => Promise<{ status: Band['status'] }>) {
         if (actionBandId.value) return
         actionBandId.value = band.id
@@ -138,6 +161,7 @@
             <div v-for="band in activeBands" :key="band.id" class="col-md-6 col-xl-4">
                 <BandCard :band="band" :member-names="memberNames" />
                 <div class="d-flex gap-2 mt-2">
+                    <button v-if="isStaff && band.status === 'approved'" class="btn btn-warning" :disabled="actionBandId !== ''" @click="strike(band)">Strike Band</button>
                     <button v-if="isStaff || band.createdBy === authStore.uid" class="btn btn-danger" :disabled="actionBandId !== ''" @click="disband(band)">Disband</button>
                     <button v-else class="btn btn-outline-danger" :disabled="actionBandId !== ''" @click="leave(band)">Leave</button>
                 </div>

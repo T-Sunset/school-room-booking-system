@@ -56,6 +56,12 @@ export async function disbandBand(bandId: string): Promise<BandActionResponse> {
     return response.data
 }
 
+// Issue individual strikes to every member of an approved band.
+export async function strikeBand(bandId: string, reason: string) {
+    const response = await api.post(`/bands/${bandId}/strike`, { reason })
+    return response.data
+}
+
 // Leave an approved band as a student member.
 export async function leaveBand(bandId: string): Promise<BandActionResponse> {
     const response = await api.patch(`/bands/${bandId}/leave`)

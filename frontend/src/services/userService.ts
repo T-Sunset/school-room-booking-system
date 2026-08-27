@@ -4,6 +4,8 @@ import { auth } from "../firebase";
 import api from "./api";
 import { useAuthStore } from "../stores/authStore";
 import type { User as FirebaseUser } from "firebase/auth";
+import type { StudentRosterEntry } from "../types/Student";
+import type { StrikeStatus } from "../types/Strike";
 
 // Actual Login function; Error handling in callers
 export async function login(rememberMe:boolean, email:string, password:string) {
@@ -17,6 +19,7 @@ export async function login(rememberMe:boolean, email:string, password:string) {
     // Apply to Pinia Auth store
     const authStore = useAuthStore()
     authStore.setUser({uid, email, role:response.data.role, yearLevel:response.data.yearLevel})
+    await hydrateStudentStrikeStatus(response.data.role)
 }
 
 // Logout Function ; Error handling in callers
@@ -46,6 +49,28 @@ export async function waitForAuth(): Promise<FirebaseUser | null> {
     })
 }
 
+export async function getStudentRoster(): Promise<StudentRosterEntry[]> {
+    const response = await api.get("/students/roster")
+    return response.data
+}
+
+export async function issueStudentStrike(userId:string, reason:string) {
+    const response = await api.post("/strikes", { userId, reason })
+    return response.data
+}
+
+export async function getMyStrikeStatus(): Promise<StrikeStatus> {
+    const response = await api.get("/strikes/mine")
+    return response.data
+}
+
+async function hydrateStudentStrikeStatus(role:string) {
+    if (role !== "student") return
+
+    const authStore = useAuthStore()
+    authStore.setStrikeStatus(await getMyStrikeStatus())
+}
+
 // Restore the authenticated user's profile after a full page refresh.
 export async function hydrateCurrentUser() {
     const user = await waitForAuth()
@@ -63,6 +88,7 @@ export async function hydrateCurrentUser() {
         role: response.data.role,
         yearLevel: response.data.yearLevel
     })
+    await hydrateStudentStrikeStatus(response.data.role)
 }
 
 // Sign Up!
@@ -85,6 +111,7 @@ export async function signUp(email:string, password:string, yearLevel:number) {
         // Apply to Pinia Auth store
         const authStore = useAuthStore()
         authStore.setUser({uid, email, role:response.data.result.role, yearLevel})
+        await hydrateStudentStrikeStatus(response.data.result.role)
     } catch (err:any) {
         console.log("Sign-up failed: ", err.response?.data || err.message)
     }
