@@ -4,116 +4,118 @@ A full-stack room booking and attendance management system designed around the p
 
 ## Overview
 
-The School Room Booking System gives students a structured way to find suitable rooms and request bookings, while giving teachers and administrators tools for approvals, room rules, student attendance, discipline, and audit review.
+The School Room Booking System provides students with a structured way to find suitable school rooms, request bookings, and manage band-based reservations, while giving teachers and administrators tools for booking approval, attendance, room administration, discipline, and auditing.
 
 The project was developed around a real-world school workflow without exposing the identity of the school or the people involved. Its design focuses on requirements-driven development, backend validation, role-based access control, school-level data isolation, and a responsive user experience.
 
 The application has three user roles:
 
-- **Students** can search for rooms, create solo or band bookings, manage bands, and view their strike status.
-- **Teachers** can approve bookings and bands, manage student strikes, and record attendance.
-- **Administrators** have teacher capabilities plus room administration, user role administration through the backend, and access to the audit viewer.
+* **Students** can search for rooms, create solo or band bookings, manage bands, and view their strike status.
+* **Teachers** can approve bookings and bands, manage student strikes, and record attendance.
+* **Administrators** have teacher capabilities plus room administration, user role administration through the backend, and access to the audit viewer.
 
 ## Key Features
 
 ### Authentication & Access Control
 
-- Firebase Authentication with email/password sign-in.
-- Student, teacher, and administrator roles.
-- Backend-authoritative role-based access control.
-- Firebase ID token verification on protected API requests.
-- School-level isolation for users, rooms, bookings, bands, strikes, and audit records.
-- School assignment during student registration based on the configured email domain.
+* Firebase Authentication with email/password sign-in.
+* Student, teacher, and administrator roles.
+* Backend-authoritative role-based access control.
+* Firebase ID token verification on protected API requests.
+* School-level isolation for users, rooms, bookings, bands, strikes, and audit records.
+* School assignment during student registration based on the configured email domain.
 
 ### Room Management
 
-- Room creation and editing for authorised administrators.
-- Configurable opening and closing hours.
-- Allowed weekdays and year-level restrictions.
-- Room-specific maximum booking duration.
-- Room usage agreements shown during booking.
-- Availability search based on the requested time, room rules, year level, and existing bookings.
-- Soft deactivation and reactivation.
+* Room creation and editing for authorised administrators.
+* Configurable opening and closing hours.
+* Allowed weekdays and year-level restrictions.
+* Room-specific maximum booking duration.
+* Room usage agreements shown during booking.
+* Availability search based on requested time, room rules, year level, and existing bookings.
+* Soft deactivation and reactivation.
 
-Deactivation preserves the room document and historical booking references. It changes the room's bookable state rather than hard-deleting the room.
+Deactivation preserves the room document and historical booking references rather than physically deleting the room.
 
 ### Booking
 
-- 30-minute start and end boundaries.
-- Variable durations in 30-minute increments, including 30, 60, and 90 minutes.
-- Room-specific maximum duration enforcement.
-- Opening-hours and allowed-day validation.
-- Server-side overlap detection during creation and approval.
-- Room-specific approval requirements.
-- Weekly student booking rules:
-  - an eligible first solo booking may be automatically approved;
-  - a second solo booking is waitlisted;
-  - bookings beyond the weekly limit are rejected;
-  - band bookings enter the staff approval workflow.
-- Staff bookings are automatically approved.
-- Staff approval and denial of pending and waitlisted bookings.
-- Booking statuses: `approved`, `pending`, `waitlisted`, `denied`, and `cancelled`.
+* 30-minute start and end boundaries.
+* Variable durations in 30-minute increments, including 30, 60, and 90 minutes.
+* Room-specific maximum duration enforcement.
+* Opening-hours and allowed-day validation.
+* Server-side overlap detection during creation and approval.
+* Room-specific approval requirements.
+* Weekly student booking rules:
+
+  * an eligible first solo booking may be automatically approved;
+  * a second solo booking is waitlisted;
+  * bookings beyond the weekly limit are rejected;
+  * band bookings enter the staff approval workflow.
+* Staff bookings are automatically approved.
+* Staff approval and denial of pending and waitlisted bookings.
+* Booking statuses: `approved`, `pending`, `waitlisted`, `denied`, and `cancelled`.
 
 The current application does not provide a booking cancellation or rescheduling workflow.
 
 ### Bands
 
-- Student band creation.
-- Member selection and minimum membership validation.
-- Same-school and student-role validation for members.
-- Duplicate band name and duplicate member-set prevention.
-- Staff approval and denial.
-- Approved-band bookings.
-- Band disbanding by authorised staff or the band creator.
-- Leaving an approved band as a non-creator member.
-- Band strikes applied as individual strike records to current members.
+* Student band creation.
+* Member selection and minimum membership validation.
+* Same-school and student-role validation for members.
+* Duplicate band name and duplicate member-set prevention.
+* Staff approval and denial.
+* Approved-band bookings.
+* Band disbanding by authorised staff or the band creator.
+* Leaving an approved band as a non-creator member.
+* Band strikes applied as individual strike records to current members.
 
 ### Strikes & Temporary Bans
 
-- Individual student strikes.
-- Band strikes applied individually to members.
-- Seven-day strike expiry.
-- Student warning state for an active strike.
-- Temporary booking bans when strikes overlap.
-- Student-visible strike and ban status.
-- Server-side prevention of new bookings while banned.
+* Individual student strikes.
+* Band strikes applied individually to members.
+* Seven-day strike expiry.
+* Student warning state for an active strike.
+* Temporary booking bans when strikes overlap.
+* Student-visible strike and ban status.
+* Server-side prevention of new bookings while banned.
 
 This is a rule-driven strike and ban workflow rather than a configurable disciplinary platform.
 
 ### Rollcall & Attendance
 
-- **Current Rollcall** for currently active approved bookings.
-- **Today's Attendance** for approved bookings that started today and remain within the editable attendance window.
-- Present/Absent tracking.
-- Independent attendance records for each booking/student combination.
-- Same-day post-booking attendance updates.
-- Attendance persistence in Firestore.
-- Attendance marking and status-change audit events.
+* **Current Rollcall** for currently active approved bookings.
+* **Today's Attendance** for approved bookings that started today and remain within the editable attendance window.
+* Present/Absent tracking.
+* Independent attendance records for each booking/student combination.
+* Same-day post-booking attendance updates.
+* Attendance persistence in Firestore.
+* Attendance marking and status-change audit events.
 
 Attendance updates are restricted to authorised staff, approved bookings, associated students, the booking's calendar day, and times after the booking has started.
 
 ### Administration & Auditing
 
-- Room administration, including deactivation and reactivation.
-- Protected backend endpoint for user role administration.
-- Append-only audit logging for important mutations.
-- Admin-only audit viewer.
-- Date, action, actor, and entity-type filters.
-- Cursor-based audit pagination.
+* Room administration, including deactivation and reactivation.
+* Protected backend endpoint for user role administration.
+* Append-only audit logging for important mutations.
+* Admin-only audit viewer.
+* Date, action, actor, and entity-type filters.
+* Cursor-based audit pagination.
 
 ## Screenshots
 
-The repository currently contains no application screenshots. This section is ready to be populated with real screenshots of the current interface.
+Screenshots of the current application can be added here.
 
-Screenshots to be added:
+Suggested captures:
 
-- Dashboard
-- Room timetable
-- Booking flow
-- Bands view
-- Today's Attendance
-- Audit viewer
-- Mobile navigation and mobile timetable
+* Dashboard
+* Room timetable
+* Booking flow
+* Bands view
+* Today's Attendance
+* Audit viewer
+* Mobile navigation
+* Mobile timetable
 
 ## Architecture
 
@@ -136,7 +138,7 @@ Firestore
 
 The frontend uses Vue views and components with Vue Router for navigation, Pinia for authentication state, Axios for API requests, and Bootstrap for responsive layout and controls.
 
-The backend uses Express route handlers, authentication middleware, RBAC helpers, and service modules for domain operations. The active API handlers are registered primarily in `backend/src/index.ts`; the repository should not be described as a fully separated controller/router architecture.
+The backend uses Express route handlers, authentication middleware, RBAC helpers, and service modules for domain operations. Active API handlers are registered primarily in `backend/src/index.ts`; the project does not currently use a fully separated controller/router architecture.
 
 Firebase Authentication handles user identity. The backend verifies Firebase ID tokens, loads the corresponding user profile, applies role and school checks, validates business rules, and persists data through the Firebase Admin SDK and Firestore.
 
@@ -144,52 +146,52 @@ Firebase Authentication handles user identity. The backend verifies Firebase ID 
 
 ### Frontend
 
-- Vue `3.5.32`
-- TypeScript `6.0.2`
-- Vite `8.0.10`
-- Pinia `3.0.4`
-- Vue Router `5.0.6`
-- Bootstrap `5.3.8`
-- Axios `1.15.2`
-- Firebase client SDK `12.12.1`
+* Vue 3
+* TypeScript
+* Vite
+* Pinia
+* Vue Router
+* Bootstrap
+* Axios
+* Firebase client SDK
 
 ### Backend
 
-- Node.js
-- Express `5.2.1`
-- TypeScript `6.0.3`
-- Firebase Admin SDK `13.8.0`
-- Firestore
-- `ts-node-dev` `2.0.0`
-- `dotenv` `17.4.2` is included as a backend dependency.
+* Node.js
+* Express
+* TypeScript
+* Firebase Admin SDK
+* Firestore
+* `ts-node-dev`
+* `dotenv`
 
 ## Security Design
 
 The application uses the following security decisions:
 
-- Firebase Authentication establishes user identity.
-- Firebase ID tokens are sent with API requests and verified by the backend.
-- Authorization is backend-authoritative; frontend visibility checks are not the security boundary.
-- RBAC protects booking approval, room administration, student management, attendance, and audit operations.
-- Server-side validation enforces room, booking, band, attendance, and strike rules.
-- `schoolId` checks isolate school data and prevent cross-school operations.
-- Administrative operations require the appropriate backend permission.
-- Audit actor identity is derived from the authenticated backend request rather than accepted as a client-controlled field.
-- Audit events are created as append-only Firestore records.
-- Firebase service-account credentials are excluded from source control through `.gitignore`.
+* Firebase Authentication establishes user identity.
+* Firebase ID tokens are sent with API requests and verified by the backend.
+* Authorization is backend-authoritative; frontend visibility checks are not the security boundary.
+* RBAC protects booking approval, room administration, student management, attendance, and audit operations.
+* Server-side validation enforces room, booking, band, attendance, and strike rules.
+* `schoolId` checks isolate school data and prevent cross-school operations.
+* Administrative operations require the appropriate backend permission.
+* Audit actor identity is derived from the authenticated backend request rather than accepted as a client-controlled field.
+* Audit events are created as append-only Firestore records.
+* Firebase service-account credentials are excluded from source control through `.gitignore`.
 
-These controls describe the current design; production deployment would still require environment-specific hardening, monitoring, and operational review.
+These controls describe the current application design. A production deployment would still require environment-specific hardening, monitoring, access management, and operational review.
 
 ## Domain Model
 
-- **School** stores school identity, permitted email domains, and student sign-up configuration.
-- **User** represents a Firebase-authenticated person with a role, school, and optional year level.
-- **Room** belongs to a school and contains bookability settings and room-specific rules.
-- **Booking** references a room and its creator, optionally references a band, and stores its time interval, status, and approval information.
-- **Band** belongs to a school, contains student member IDs, and moves through pending, approved, denied, and disbanded states.
-- **Strike** belongs to a student and school, records its issuer and reason, and expires after seven days. Band strikes also retain the originating band ID.
-- **Attendance** is stored per booking/student and records the current status, recording user, and update timestamps.
-- **AuditEvent** records important mutations with the authenticated actor, school, entity, action, timestamp, and optional metadata.
+* **School** stores school identity, permitted email domains, and student sign-up configuration.
+* **User** represents a Firebase-authenticated person with a role, school, and optional year level.
+* **Room** belongs to a school and contains bookability settings and room-specific rules.
+* **Booking** references a room and its creator, optionally references a band, and stores its time interval, status, and approval information.
+* **Band** belongs to a school, contains student member IDs, and moves through pending, approved, denied, and disbanded states.
+* **Strike** belongs to a student and school, records its issuer and reason, and expires after seven days. Band strikes also retain the originating band ID.
+* **Attendance** is stored per booking/student and records the current status, recording user, and update timestamps.
+* **AuditEvent** records important mutations with the authenticated actor, school, entity, action, timestamp, and optional metadata.
 
 The principal relationships are school-scoped: students, rooms, bookings, bands, strikes, and audit events carry a school association; bookings reference rooms and users or bands; and attendance is keyed to a booking/student pair.
 
@@ -208,9 +210,9 @@ Staff-created bookings bypass the student approval rules and are automatically a
 
 ### Prerequisites
 
-- Node.js and npm.
-- A Firebase project with Firebase Authentication and Firestore enabled.
-- A local Firebase Admin service-account credential for the backend.
+* Node.js and npm.
+* A Firebase project with Firebase Authentication and Firestore enabled.
+* A local Firebase Admin service-account credential for the backend.
 
 Clone the repository and install dependencies separately for each application:
 
@@ -227,7 +229,9 @@ npm install
 
 ### Backend
 
-The backend currently imports a local `serviceAccountKey.json` from `backend/src/config/firebase.ts`. Supply that credential locally and do not commit it. The filename is excluded by `.gitignore`.
+The backend currently imports a local `serviceAccountKey.json` from `backend/src/config/firebase.ts`.
+
+Supply that credential locally and do not commit it. The filename is excluded by `.gitignore`.
 
 Start the backend development server:
 
@@ -236,11 +240,17 @@ cd backend
 npm run dev
 ```
 
-The frontend API client currently targets the local backend at `http://localhost:3000`.
+The frontend API client currently targets the local backend at:
+
+```text
+http://localhost:3000
+```
 
 ### Frontend
 
-The Firebase web configuration is currently present directly in `frontend/src/firebase.ts`; it is not loaded from `.env` in the current source. Do not copy live project identifiers or credentials into public documentation.
+The Firebase web configuration is currently present directly in `frontend/src/firebase.ts` rather than being loaded from `.env`.
+
+Do not copy live project identifiers, credentials, or other environment-specific information into public documentation.
 
 Start the frontend development server:
 
@@ -255,31 +265,31 @@ Create a production frontend build with:
 npm run build
 ```
 
-The build runs Vue/TypeScript validation through `vue-tsc` before invoking Vite.
+The build performs Vue/TypeScript validation through `vue-tsc` before invoking Vite.
 
 ## Testing
 
 ### Frontend
 
-The frontend build performs the available Vue/TypeScript project check:
+The frontend build performs the available Vue/TypeScript project validation:
 
 ```bash
 cd frontend
 npm run build
 ```
 
-The current build completes successfully.
+The current frontend production build completes successfully.
 
 ### Backend
 
-The backend includes focused tests for:
+The backend includes focused tests covering areas such as:
 
-- band member validation;
-- booking time boundaries and durations;
-- booking date-range calculations;
-- room availability and half-hour cells;
-- strike warning and ban logic;
-- booking interval overlap behavior.
+* band member validation;
+* booking time boundaries and durations;
+* booking date-range calculations;
+* room availability and half-hour cells;
+* strike warning and ban logic;
+* booking interval overlap behaviour.
 
 Run them with:
 
@@ -288,37 +298,58 @@ cd backend
 npm test
 ```
 
-#### Current testing limitation
+### Current backend test configuration
 
-The six discovered backend test files currently do not execute their assertions successfully. The native Node test runner encounters the repository's CommonJS/ESM and TypeScript module-configuration mismatch during test loading, and one `.mjs` test reports an unavailable module export.
+The current backend test configuration prevents the native Node test runner from executing the test assertions successfully. The repository uses a CommonJS package configuration while several tests import TypeScript modules using ES-module syntax, producing module-loading errors before the assertions run. One existing `.mjs` test also expects an export that Node reports as unavailable.
 
-There is currently no integration or end-to-end test suite. This is known technical debt rather than an unimplemented core application feature.
+There is currently no integration or end-to-end test suite.
+
+This is known technical debt rather than an indication that the core application workflows are unimplemented.
 
 ## Project Status
 
-The core application feature set is implemented, including authentication, RBAC, school isolation, room management, room availability, booking approval workflows, bands, strikes, attendance, responsive views, and audit review.
+The core application feature set is implemented, including:
 
-The frontend production build currently passes. Remaining work is primarily test-runner configuration, broader automated coverage, production deployment hardening, and optional feature extensions rather than the original core workflow.
+* authentication;
+* role-based access control;
+* school isolation;
+* room management;
+* room availability;
+* 30-minute booking workflows;
+* booking approval and waitlisting;
+* bands;
+* strikes and temporary bans;
+* Rollcall and attendance;
+* responsive views;
+* administration;
+* append-only audit logging;
+* audit review.
+
+The frontend production build currently passes.
+
+Remaining work is primarily test-runner configuration, broader automated coverage, production deployment hardening, and optional feature extensions rather than the original core workflow.
 
 This project is not presented as a finished commercial SaaS product or as generally production-ready without further operational review.
 
 ## Known Limitations & Future Improvements
 
-- Resolve the backend CommonJS/ESM test-runner configuration and restore executable assertions.
-- Add integration and end-to-end tests.
-- Add booking cancellation and rescheduling workflows.
-- Add email or in-application notifications.
-- Add an Admin frontend for role management.
-- Improve concurrency protection around simultaneous booking conflicts.
-- Add historical attendance and reporting views.
-- Complete production deployment, monitoring, and operational hardening.
-- Evaluate broader multi-school hosted deployment requirements.
+* Resolve the backend CommonJS/ESM test-runner configuration and restore executable assertions.
+* Add integration and end-to-end tests.
+* Add booking cancellation and rescheduling workflows.
+* Add email or in-application notifications.
+* Add an Admin frontend for role management.
+* Improve concurrency protection around simultaneous booking conflicts.
+* Add historical attendance and reporting views.
+* Complete production deployment, monitoring, and operational hardening.
+* Evaluate broader multi-school hosted deployment requirements.
 
 These items are future improvements and do not prevent the current core application workflow from functioning.
 
 ## Project Context
 
-This system was built as a practical full-stack software-engineering project around a secondary-school room-booking problem. The work involved translating real workflow requirements into domain models, backend validation, authentication and authorization rules, school data isolation, responsive UI patterns, attendance persistence, and auditable administrative actions.
+This system was built as a practical full-stack software-engineering project around a secondary-school room-booking problem.
+
+The work involved translating real workflow requirements into domain models, backend validation, authentication and authorization rules, school data isolation, responsive UI patterns, attendance persistence, and auditable administrative actions.
 
 ## License
 
