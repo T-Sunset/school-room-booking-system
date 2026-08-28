@@ -2,6 +2,7 @@
     // OneRoomView.vue
     // Imports
     import { useRoute } from 'vue-router';
+    import { useRouter } from 'vue-router';
     import {computed, ref, onMounted} from 'vue';
     import type { PossibleBooking } from '../types/Booking';
     import type { Room } from '../types/Room';
@@ -11,6 +12,7 @@
 
     // Get the Room ID selected from the Rooms view
     const route = useRoute() // Use the router
+    const router = useRouter()
     const roomId = route.params.id 
     const room = ref<Room | null>(null) // Room or null
 
@@ -21,6 +23,7 @@
     const error = ref("")
     const availability = ref<RoomAvailabilityCell[]>([])
     const selectedBooking = ref<PossibleBooking | null>(null)
+    const selectedDay = ref(1)
     const bookingFeedback = ref("")
     const bookingFeedbackType = ref<"success" | "danger">("success")
 
@@ -93,6 +96,19 @@
         return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
     }
 
+    function formatCellInterval(cell: RoomAvailabilityCell | undefined) {
+        if (!cell) return "No scheduled interval"
+        return `${formatCellTime(cell.startTime)}-${formatCellTime(cell.endTime)}`
+    }
+
+    function statusLabel(status: RoomAvailabilityCell["status"]) {
+        return status === "available" ? "Available" : status === "booked" ? "Booked" : "Unavailable"
+    }
+
+    function statusSymbol(status: RoomAvailabilityCell["status"]) {
+        return status === "available" ? "✓" : status === "booked" ? "●" : "×"
+    }
+
     function canBookCell(day: number, hour: number) {
         const cell = getCell(day, hour)
         return cell?.status === "available" && new Date(cell.startTime) > new Date()
@@ -127,11 +143,12 @@
 </script>
 
 <template>
-    <!-- Header -->
-    <h1 class="mb-4" v-if="loading">Room View</h1>
+    <div v-if="loading" class="view-header">
+        <h1>Room</h1>
+    </div>
 
     <!-- Loading Message -->
-     <div v-if="loading">
+    <div v-if="loading" class="loading-state" role="status">
         Loading Rooms... Please Wait.
      </div>
 
@@ -140,12 +157,17 @@
         {{ error }}
      </div>
     
-    <!-- Proper Header -->
-     <h1 class="mb-4" v-if="!loading && room">{{ room.name }}</h1>
+     <div v-if="!loading && room" class="view-header">
+        <div>
+            <h1>{{ room.name }}</h1>
+            <p class="section-description mb-0">Room availability and booking rules.</p>
+        </div>
+        <button type="button" class="btn btn-outline-primary" @click="router.push('/rooms')">Back to rooms</button>
+     </div>
         <div v-if="bookingFeedback" class="alert" :class="`alert-${bookingFeedbackType}`">{{ bookingFeedback }}</div>
 
     <!-- Header Information Cards -->
-     <div class="row mb-4">
+    <div class="row g-3 mb-4 room-summary-grid">
         <!-- Accepting Bookings? -->
         <div class="col-sm-4">
             <div class="card p-3 text-center">
@@ -172,7 +194,7 @@
         </div>
      </div>
      
-     <div class="row">
+    <div class="row g-3">
         <!-- Allowed Days -->
         <div class="col-sm-4">
             <div class="card p-3 text-center">
@@ -197,7 +219,7 @@
         <div class="col-sm-4">
             <div class="card p-3 text-center">
                 <h5>Booking Rules</h5>
-                <p>{{ room?.rules.agreement }}</p>
+                <p class="text-wrap-anywhere mb-0">{{ room?.rules.agreement }}</p>
             </div>
         </div>
      </div>
@@ -205,26 +227,96 @@
      <!-- Rule Break -->
       <hr/>
 
-     <!-- Booking Table -->
-     <table class="table table-bordered text-center">
-        <thead>
-            <tr>
-                <th>Time</th>
-                <th v-for="day in days" :key="day.value">{{ day.label }}</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr v-for="slot in timeSlots" :key="slot.startTime">
-                <td>{{ formatCellTime(slot.startTime) }}</td>
-                <td v-for="day in days" :key="`${day.value}-${getCell(day.value, slot.hour)?.startTime || slot.startTime}`">
-                    <div>{{ getCellStatus(day.value, slot.hour) }}</div>
-                    <button v-if="canBookCell(day.value, slot.hour)" type="button" class="btn btn-sm btn-primary mt-1" @click="openCellBooking(day.value, slot.hour)">
-                        Book
+     <!-- Booking timetable: transposed on larger screens to keep the school week compact. -->
+     <section class="room-timetable" aria-label="Room availability timetable">
+        <div class="room-timetable-toolbar">
+            <h2 class="room-timetable-title">Weekly availability</h2>
+            <div class="room-timetable-legend" aria-label="Timetable legend">
+                <span><strong class="room-timetable-legend-symbol room-timetable-legend-available" aria-hidden="true">✓</strong> Available</span>
+                <span><strong class="room-timetable-legend-symbol room-timetable-legend-booked" aria-hidden="true">●</strong> Booked</span>
+                <span><strong class="room-timetable-legend-symbol room-timetable-legend-unavailable" aria-hidden="true">×</strong> Unavailable</span>
+            </div>
+        </div>
+        <div class="room-timetable-desktop" role="region" aria-label="Weekly room availability" tabindex="0">
+            <table class="table table-bordered room-timetable-grid">
+                <thead>
+                    <tr>
+                        <th scope="col" class="room-timetable-day-header">Day</th>
+                        <th v-for="slot in timeSlots" :key="slot.startTime" scope="col" class="room-timetable-time-header">
+                            {{ formatCellTime(slot.startTime) }}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="day in days" :key="day.value">
+                        <th scope="row" class="room-timetable-day-label">{{ day.label }}</th>
+                        <td v-for="slot in timeSlots" :key="`${day.value}-${slot.hour}`" class="room-timetable-cell">
+                            <button
+                                v-if="canBookCell(day.value, slot.hour)"
+                                type="button"
+                                class="room-timetable-action room-timetable-action-available"
+                                :aria-label="`${day.label}, ${formatCellInterval(getCell(day.value, slot.hour))}, available`"
+                                :title="`${day.label}, ${formatCellInterval(getCell(day.value, slot.hour))}, available`"
+                                @click="openCellBooking(day.value, slot.hour)">
+                                <span class="room-timetable-symbol" aria-hidden="true">{{ statusSymbol(getCellStatus(day.value, slot.hour)) }}</span>
+                            </button>
+                            <span
+                                v-else
+                                class="room-timetable-state"
+                                :class="`room-timetable-state-${getCellStatus(day.value, slot.hour)}`"
+                                role="img"
+                                :aria-label="`${day.label}, ${formatCellInterval(getCell(day.value, slot.hour))}, ${statusLabel(getCellStatus(day.value, slot.hour))}`"
+                                :title="`${day.label}, ${formatCellInterval(getCell(day.value, slot.hour))}, ${statusLabel(getCellStatus(day.value, slot.hour))}`">
+                                <span class="room-timetable-symbol" aria-hidden="true">{{ statusSymbol(getCellStatus(day.value, slot.hour)) }}</span>
+                            </span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="room-timetable-mobile">
+            <div class="room-day-selector" role="group" aria-label="Choose a day">
+                <button
+                    v-for="day in days"
+                    :key="day.value"
+                    type="button"
+                    class="btn btn-outline-primary room-day-selector-button"
+                    :class="{ active: selectedDay === day.value }"
+                    :aria-pressed="selectedDay === day.value"
+                    @click="selectedDay = day.value">
+                    {{ day.label }}
+                </button>
+            </div>
+
+            <div class="room-mobile-schedule" role="region" :aria-label="`${days.find(day => day.value === selectedDay)?.label} room availability`">
+                <div v-for="slot in timeSlots" :key="`${selectedDay}-${slot.hour}`" class="room-mobile-slot">
+                    <div class="room-mobile-slot-time">
+                        <strong>{{ formatCellTime(slot.startTime) }}</strong>
+                        <span>{{ formatCellTime(slot.endTime) }}</span>
+                    </div>
+                    <button
+                        v-if="canBookCell(selectedDay, slot.hour)"
+                        type="button"
+                        class="room-timetable-action room-timetable-action-available room-mobile-slot-state"
+                        :aria-label="`${days.find(day => day.value === selectedDay)?.label}, ${formatCellInterval(getCell(selectedDay, slot.hour))}, available`"
+                        :title="`${days.find(day => day.value === selectedDay)?.label}, ${formatCellInterval(getCell(selectedDay, slot.hour))}, available`"
+                        @click="openCellBooking(selectedDay, slot.hour)">
+                        <span class="room-timetable-symbol" aria-hidden="true">{{ statusSymbol(getCellStatus(selectedDay, slot.hour)) }}</span>
                     </button>
-                </td>
-            </tr>
-        </tbody>
-     </table>
+                    <span
+                        v-else
+                        class="room-timetable-state room-mobile-slot-state"
+                        :class="`room-timetable-state-${getCellStatus(selectedDay, slot.hour)}`"
+                        role="img"
+                        :aria-label="`${days.find(day => day.value === selectedDay)?.label}, ${formatCellInterval(getCell(selectedDay, slot.hour))}, ${statusLabel(getCellStatus(selectedDay, slot.hour))}`"
+                        :title="`${days.find(day => day.value === selectedDay)?.label}, ${formatCellInterval(getCell(selectedDay, slot.hour))}, ${statusLabel(getCellStatus(selectedDay, slot.hour))}`">
+                        <span class="room-timetable-symbol" aria-hidden="true">{{ statusSymbol(getCellStatus(selectedDay, slot.hour)) }}</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+     </section>
 
      <BookingModal
         v-if="room && selectedBooking"

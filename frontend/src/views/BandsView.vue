@@ -125,7 +125,7 @@
 </script>
 
 <template>
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="view-header">
         <h1 class="mb-0">{{ isStaff ? 'Band Applications' : 'Bands' }}</h1>
         <button v-if="authStore.role === 'student'" class="btn btn-primary" @click="showCreateModal = true">
             Create Band
@@ -135,9 +135,9 @@
     <div v-if="success" class="alert alert-success">{{ success }}</div>
     <div v-if="error" class="alert alert-danger">{{ error }}</div>
 
-    <div v-if="loading" class="card p-4">Loading {{ isStaff ? 'band applications' : 'your bands' }}...</div>
+    <div v-if="loading" class="loading-state" role="status">Loading {{ isStaff ? 'band applications' : 'your bands' }}...</div>
 
-    <div v-else-if="applications.length === 0" class="card p-4">
+    <div v-else-if="applications.length === 0" class="empty-state">
         <h5>{{ isStaff ? 'No pending band applications.' : 'No band applications yet.' }}</h5>
         <p v-if="!isStaff" class="mb-0 text-muted">Create a band with students from your school to get started.</p>
     </div>
@@ -147,7 +147,7 @@
         <div class="row g-3 mb-4">
             <div v-for="band in applications" :key="band.id" class="col-md-6 col-xl-4">
             <BandCard :band="band" :member-names="memberNames" />
-                <div v-if="isStaff" class="d-flex gap-2 mt-2">
+                <div v-if="isStaff" class="action-row mt-2">
                     <button class="btn btn-success" :disabled="actionBandId !== ''" @click="approve(band)">Approve</button>
                     <button class="btn btn-danger" :disabled="actionBandId !== ''" @click="deny(band)">Deny</button>
                 </div>
@@ -160,7 +160,7 @@
         <div class="row g-3">
             <div v-for="band in activeBands" :key="band.id" class="col-md-6 col-xl-4">
                 <BandCard :band="band" :member-names="memberNames" />
-                <div class="d-flex gap-2 mt-2">
+                <div class="action-row mt-2">
                     <button v-if="isStaff && band.status === 'approved'" class="btn btn-warning" :disabled="actionBandId !== ''" @click="strike(band)">Strike Band</button>
                     <button v-if="isStaff || band.createdBy === authStore.uid" class="btn btn-danger" :disabled="actionBandId !== ''" @click="disband(band)">Disband</button>
                     <button v-else class="btn btn-outline-danger" :disabled="actionBandId !== ''" @click="leave(band)">Leave</button>
@@ -169,7 +169,7 @@
         </div>
     </template>
 
-    <div v-if="!loading && activeBands.length === 0" class="card p-4 mt-4">
+    <div v-if="!loading && activeBands.length === 0" class="empty-state mt-4">
         <h5>{{ isStaff ? 'No active bands at this school.' : 'You are not currently in any active bands.' }}</h5>
         <p class="mb-0 text-muted">Active bands appear here after they have been approved.</p>
     </div>

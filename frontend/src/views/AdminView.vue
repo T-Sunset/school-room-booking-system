@@ -83,12 +83,12 @@
 	</div>
 
 	<template v-else>
-		<div class="d-flex justify-content-between align-items-center mb-4">
+		<div class="view-header">
 			<h1 class="mb-0">Audit Log</h1>
 			<button class="btn btn-primary" :disabled="loading" @click="applyFilters">Refresh</button>
 		</div>
 
-		<form class="card p-3 mb-3" @submit.prevent="applyFilters">
+		<form class="card form-section filter-form mb-3" @submit.prevent="applyFilters">
 			<div class="row g-2 align-items-end">
 				<div class="col-md-2">
 					<label class="form-label" for="audit-from">From</label>
@@ -123,10 +123,10 @@
 		</form>
 
 		<div v-if="error" class="alert alert-danger">{{ error }}</div>
-		<div v-if="loading" class="card p-4">Loading audit events...</div>
-		<div v-else-if="!error && events.length === 0" class="card p-4 text-muted">No audit events found.</div>
-		<div v-else class="card p-3 table-responsive">
-			<table class="table table-striped align-middle mb-0">
+		<div v-if="loading" class="loading-state" role="status">Loading audit events...</div>
+		<div v-else-if="!error && events.length === 0" class="empty-state">No audit events found.</div>
+		<div v-else class="card data-card table-responsive">
+			<table class="table table-striped table-sm data-table align-middle mb-0">
 				<thead>
 					<tr>
 						<th>Date/time</th>
@@ -140,9 +140,9 @@
 					<tr v-for="event in events" :key="event.id">
 						<td>{{ formatTimestamp(event.timestamp) }}</td>
 						<td>{{ event.actor.email }}</td>
-						<td><code>{{ event.action }}</code></td>
-						<td>{{ event.entityType }}:{{ event.entityId }}</td>
-						<td class="text-break">{{ formatMetadata(event) }}</td>
+						<td><span class="status-badge status-neutral"><code>{{ event.action }}</code></span></td>
+						<td><strong>{{ event.entityType }}</strong><small class="d-block text-muted text-wrap-anywhere">{{ event.entityId }}</small></td>
+						<td class="audit-context text-break">{{ formatMetadata(event) }}</td>
 					</tr>
 				</tbody>
 			</table>

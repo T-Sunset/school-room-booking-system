@@ -66,6 +66,11 @@
         return room.isInUse ? "In use" : "Available"
     }
 
+    function getRoomStatusClass(room: Room) {
+        if (!room.isBookable) return "status-neutral"
+        return room.isInUse ? "status-warning" : "status-available"
+    }
+
     async function removeRoom(room: Room) {
         if (!window.confirm(`Deactivate ${room.name}? Historical bookings will be preserved.`)) return
 
@@ -90,11 +95,16 @@
 </script>
 
 <template>
-    <!-- Header -->
-    <h1 class="mb-4">Rooms View</h1>
+    <div class="view-header">
+        <div>
+            <h1>Rooms</h1>
+            <p class="section-description mb-0">Browse room availability and booking rules.</p>
+        </div>
+        <button v-if="authStore.role === 'admin'" class="btn btn-primary" @click="openRoomModal()">Add room</button>
+    </div>
 
     <!-- Loading Message -->
-     <div v-if="loading">
+    <div v-if="loading" class="loading-state" role="status">
         Loading Rooms... Please Wait.
      </div>
 
@@ -107,9 +117,9 @@
     </div>
 
     <!-- Content Card -->
-     <div class="card p-3" v-if="!loading && rooms.length">
+    <div class="card data-card table-responsive" v-if="!loading && rooms.length">
         <!-- Table displaying rooms -->
-         <table class="table table-striped">
+         <table class="table table-striped table-sm data-table">
             <!-- Column Headers -->
             <thead>
                 <tr>
@@ -124,13 +134,13 @@
              <tbody>
                 <tr v-for="room in rooms" :key="room.id">
                     <td>{{ room.name }}</td>
-                    <td>{{ getRoomStatus(room) }}</td>
-                    <td>{{ formatNextAvailable(room) }}</td>
-                    <td>
-                        <button class="btn btn-sm btn-primary me-2" @click="viewRoom(room.id)">
+                    <td><span class="status-badge" :class="getRoomStatusClass(room)">{{ getRoomStatus(room) }}</span></td>
+                    <td class="text-muted">{{ formatNextAvailable(room) }}</td>
+                    <td class="action-row">
+                        <button class="btn btn-sm btn-primary" @click="viewRoom(room.id)">
                             View
                         </button>
-                        <button v-if="authStore.role === 'admin'" class="btn btn-sm btn-warning me-2" :disabled="actionRoomId !== ''" @click="openRoomModal(room)">
+                        <button v-if="authStore.role === 'admin'" class="btn btn-sm btn-warning" :disabled="actionRoomId !== ''" @click="openRoomModal(room)">
                             Edit
                         </button>
                         <button v-if="authStore.role === 'admin' && room.isBookable" class="btn btn-sm btn-danger" :disabled="actionRoomId !== ''" @click="removeRoom(room)">
@@ -144,19 +154,9 @@
      </div>
 
     <!-- No Rooms? (Megamind face here) -->
-    <div v-else-if="!loading" class="card p-3">
+    <div v-else-if="!loading" class="empty-state">
         <h5>No Rooms Found.</h5>
     </div>
-
-    <!-- Add Room Button -->
-     <!-- FOR TESTING PURPOSES, THIS IS SET TO NOT-ADMINS. CHANGE!! -->
-    <div class="d-flex justify-content-end align-items-end mt-3" v-if="authStore.role === 'admin'">
-        <div class="card shadow-sm"  style="width:12rem">
-            <button class="btn btn-lg btn-success" @click="openRoomModal()">
-                + Add Room
-            </button>
-        </div>
-     </div>
 
      <!-- Create Room / Edit Room Modal -->
      <RoomModal v-if="showRoomModal" @close="closeRoomModal" @finished="loadRooms" :roomData="selectedRoom"></RoomModal>

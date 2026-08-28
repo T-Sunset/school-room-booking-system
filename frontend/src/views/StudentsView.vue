@@ -40,9 +40,9 @@
     }
 
     function statusClass(student: StudentRosterEntry) {
-        if (student.strikeStatus.isBanned) return 'text-bg-danger'
-        if (student.strikeStatus.hasWarning) return 'text-bg-warning'
-        return 'text-bg-success'
+        if (student.strikeStatus.isBanned) return 'status-danger'
+        if (student.strikeStatus.hasWarning) return 'status-warning'
+        return 'status-success'
     }
 
     function formatDate(value: string | null) {
@@ -78,17 +78,17 @@
     </div>
 
     <template v-else>
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="view-header">
             <h1 class="mb-0">Student Roster</h1>
             <button class="btn btn-primary" :disabled="loading || actionStudentId !== ''" @click="loadRoster">Refresh</button>
         </div>
 
         <div v-if="success" class="alert alert-success">{{ success }}</div>
         <div v-if="error" class="alert alert-danger">{{ error }}</div>
-        <div v-if="loading" class="card p-4">Loading student roster...</div>
-        <div v-else-if="students.length === 0" class="card p-4 text-muted">No students found in your school.</div>
-        <div v-else class="card p-3 table-responsive">
-            <table class="table table-striped align-middle mb-0">
+        <div v-if="loading" class="loading-state" role="status">Loading student roster...</div>
+        <div v-else-if="students.length === 0" class="empty-state">No students found in your school.</div>
+        <div v-else class="card data-card table-responsive">
+            <table class="table table-striped table-sm data-table align-middle mb-0">
                 <thead>
                     <tr>
                         <th>Student</th>
@@ -99,10 +99,13 @@
                 </thead>
                 <tbody>
                     <tr v-for="student in students" :key="student.id">
-                        <td>{{ student.email }}</td>
+                        <td>
+                            <strong class="d-block text-wrap-anywhere">{{ student.email }}</strong>
+                            <small class="text-muted">Student account</small>
+                        </td>
                         <td>{{ student.yearLevel ?? '-' }}</td>
                         <td>
-                            <span class="badge" :class="statusClass(student)">
+                            <span class="status-badge" :class="statusClass(student)">
                                 {{ statusLabel(student) }}
                             </span>
                         </td>

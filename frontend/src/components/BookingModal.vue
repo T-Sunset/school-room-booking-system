@@ -74,10 +74,10 @@
 
 <template>
     <div class="modal-backdrop-custom">
-        <div class="modal-dialog-custom">
-            <div class="card p-4">
+        <div class="modal-dialog-custom" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
+            <div class="card p-4 modal-card">
                 <!-- Header -->
-                 <h4>Making a Booking</h4>
+                 <h4 id="booking-modal-title">Making a Booking</h4>
                  <div v-if="error" class="alert alert-danger">{{ error }}</div>
                     <!-- Booking Details -->
                     <!-- Get the Room's Name -->
@@ -154,3 +154,4 @@
     max-width: 90%;
 }
 </style>
+
