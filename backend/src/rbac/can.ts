@@ -15,3 +15,6 @@ export function canOverrideRules(role: UserRole) {
 export function canManageStudents(role: UserRole) {
     return permissions[role].manageStudents
 }
+export function canRecordAttendance(role: UserRole) {
+    return permissions[role].recordAttendance
+}

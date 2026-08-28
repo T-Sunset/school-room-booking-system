@@ -5,10 +5,10 @@
     import { getStartOfWeek } from '../types/Booking'
     import type { Room } from '../types/Room'
     import { getRooms } from '../services/roomService'
-    import { getBookings, getRollcall, getSchoolBookingsForDate } from '../services/bookingService'
+    import { getBookings, getRollcall, getSchoolBookingsForDate, getTodayAttendance, updateAttendance } from '../services/bookingService'
     import { getBandsForUser, getSameSchoolStudents } from '../services/bandService'
     import type { Band } from '../types/Band'
-    import type { RollcallEntry } from '../types/Booking'
+    import type { AttendanceUpdateStatus, RollcallEntry } from '../types/Booking'
     import BandCard from '../components/BandCard.vue'
     import { useAuthStore } from '../stores/authStore'
 
@@ -22,6 +22,7 @@
     const bands = ref<Band[]>([])
     const memberNames = ref<Record<string, string>>({})
     const rollcallEntries = ref<RollcallEntry[]>([])
+    const todayAttendanceEntries = ref<RollcallEntry[]>([])
     const rooms = ref<Room[]>([])
 
     const myBookingsThisWeek = computed(() => {
@@ -50,13 +51,24 @@
         }).length
     })
     const staffRollcallLoading = ref(false)
+    const staffAttendanceLoading = ref(false)
     const staffBookingsLoading = ref(false)
     const staffRollcallError = ref("")
+    const staffAttendanceError = ref("")
     const staffBookingsError = ref("")
     const rollcallLastUpdated = ref("")
+    const attendanceLastUpdated = ref("")
+    const attendanceSaving = ref<Record<string, boolean>>({})
+    const attendanceFeedback = ref<Record<string, { type: "success" | "danger", message: string }>>({})
     const todaysBookings = computed(() => {
         return [...bookings.value].sort((first, second) =>
             new Date(first.startTime).getTime() - new Date(second.startTime).getTime())
+    })
+    const todaysAttendance = computed(() => {
+        return [...todayAttendanceEntries.value].sort((first, second) =>
+            new Date(first.startTime).getTime() - new Date(second.startTime).getTime() ||
+            first.bookingId.localeCompare(second.bookingId) ||
+            first.studentId.localeCompare(second.studentId))
     })
 
     function getLocalDateString(date: Date) {
@@ -64,6 +76,40 @@
         const month = String(date.getMonth() + 1).padStart(2, "0")
         const day = String(date.getDate()).padStart(2, "0")
         return `${year}-${month}-${day}`
+    }
+
+    function getAttendanceKey(entry: RollcallEntry) {
+        return `${entry.bookingId}:${entry.studentId}`
+    }
+
+    async function setAttendance(entry: RollcallEntry, status: AttendanceUpdateStatus) {
+        const key = getAttendanceKey(entry)
+        if (attendanceSaving.value[key]) return
+
+        attendanceSaving.value = { ...attendanceSaving.value, [key]: true }
+        const feedback = { ...attendanceFeedback.value }
+        delete feedback[key]
+        attendanceFeedback.value = feedback
+
+        try {
+            const savedAttendance = await updateAttendance(entry.bookingId, entry.studentId, { status })
+            entry.attendanceStatus = savedAttendance.status
+            entry.attendanceUpdatedBy = savedAttendance.updatedBy
+            entry.attendanceUpdatedAt = savedAttendance.updatedAt
+            attendanceFeedback.value = {
+                ...attendanceFeedback.value,
+                [key]: { type: "success", message: "Attendance saved." }
+            }
+        } catch (err:any) {
+            attendanceFeedback.value = {
+                ...attendanceFeedback.value,
+                [key]: { type: "danger", message: err.response?.data?.error || err.message || "Unable to save attendance." }
+            }
+        } finally {
+            const saving = { ...attendanceSaving.value }
+            delete saving[key]
+            attendanceSaving.value = saving
+        }
     }
 
     async function refreshRollcall() {
@@ -80,6 +126,20 @@
         }
     }
 
+    async function refreshTodayAttendance() {
+        if (!isStaff) return
+        staffAttendanceLoading.value = true
+        staffAttendanceError.value = ""
+        try {
+            todayAttendanceEntries.value = await getTodayAttendance()
+            attendanceLastUpdated.value = new Date().toLocaleString()
+        } catch (err:any) {
+            staffAttendanceError.value = err.response?.data?.error || err.message || "Unable to load today's attendance."
+        } finally {
+            staffAttendanceLoading.value = false
+        }
+    }
+
     onMounted(async () => {
         dashboardLoading.value = true
         dashboardError.value = ""
@@ -87,10 +147,15 @@
         bands.value = []
         memberNames.value = {}
         rollcallEntries.value = []
+        todayAttendanceEntries.value = []
         rooms.value = []
+        attendanceSaving.value = {}
+        attendanceFeedback.value = {}
         staffRollcallError.value = ""
+        staffAttendanceError.value = ""
         staffBookingsError.value = ""
         rollcallLastUpdated.value = ""
+        attendanceLastUpdated.value = ""
 
         try {
             if (authStore.role === "student") {
@@ -116,11 +181,13 @@
                 }
             } else if (isStaff) {
                 staffRollcallLoading.value = true
+                staffAttendanceLoading.value = true
                 staffBookingsLoading.value = true
-                const [roomsResult, rollcallResult, bookingsResult] = await Promise.allSettled([
+                const [roomsResult, rollcallResult, bookingsResult, attendanceResult] = await Promise.allSettled([
                     getRooms(),
                     getRollcall(),
-                    getSchoolBookingsForDate(getLocalDateString(new Date()))
+                    getSchoolBookingsForDate(getLocalDateString(new Date())),
+                    getTodayAttendance()
                 ])
                 if (roomsResult.status === "fulfilled") rooms.value = roomsResult.value as Room[]
                 if (rollcallResult.status === "fulfilled") {
@@ -136,6 +203,13 @@
                     staffBookingsError.value = "Unable to load today's bookings."
                 }
                 staffBookingsLoading.value = false
+                if (attendanceResult.status === "fulfilled") {
+                    todayAttendanceEntries.value = attendanceResult.value
+                    attendanceLastUpdated.value = new Date().toLocaleString()
+                } else {
+                    staffAttendanceError.value = "Unable to load today's attendance."
+                }
+                staffAttendanceLoading.value = false
             }
         } catch (err:any) {
             dashboardError.value = err.response?.data?.error || err.message || "Unable to load Dashboard data."
@@ -259,17 +333,17 @@
 
             <section class="col-12">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="h4 mb-0">Today's Rollcall</h2>
+                    <h2 class="h4 mb-0">Students In the Building:</h2>
                     <button class="btn btn-primary" :disabled="staffRollcallLoading" @click="refreshRollcall">Refresh</button>
                 </div>
                 <p v-if="rollcallLastUpdated" class="text-muted">Last updated: {{ rollcallLastUpdated }}</p>
                 <div v-if="staffRollcallError" class="alert alert-danger">{{ staffRollcallError }}</div>
                 <div v-else-if="staffRollcallLoading" class="card p-3">Loading Rollcall...</div>
-                <div v-else-if="rollcallEntries.length === 0" class="card p-3 text-muted">No students are currently recorded as being in the building.</div>
+                <div v-else-if="rollcallEntries.length === 0" class="card p-3 text-muted">No students are currently recorded as being allowed in the building.</div>
                 <div v-else class="card p-3 table-responsive">
                     <table class="table table-striped align-middle mb-0">
                         <thead>
-                            <tr><th>Student</th><th>Room</th><th>Band</th><th>Start</th><th>End</th></tr>
+                            <tr><th>Student</th><th>Room</th><th>Band</th><th>Start</th><th>End</th><th>Attendance</th></tr>
                         </thead>
                         <tbody>
                             <tr v-for="entry in rollcallEntries" :key="`${entry.bookingId}-${entry.studentId}`">
@@ -278,6 +352,67 @@
                                 <td>{{ entry.bandName || '-' }}</td>
                                 <td>{{ new Date(entry.startTime).toLocaleTimeString() }}</td>
                                 <td>{{ new Date(entry.endTime).toLocaleTimeString() }}</td>
+                                <td>
+                                    <span class="badge mb-2" :class="entry.attendanceStatus === 'present' ? 'bg-success' : entry.attendanceStatus === 'absent' ? 'bg-danger' : 'bg-secondary'">
+                                        {{ entry.attendanceStatus === 'unmarked' ? 'Unmarked' : entry.attendanceStatus === 'present' ? 'Present' : 'Absent' }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h4 mb-0">Today's Attendance</h2>
+                    <button class="btn btn-primary" :disabled="staffAttendanceLoading" @click="refreshTodayAttendance">Refresh</button>
+                </div>
+                <p v-if="attendanceLastUpdated" class="text-muted">Last updated: {{ attendanceLastUpdated }}</p>
+                <div v-if="staffAttendanceError" class="alert alert-danger">{{ staffAttendanceError }}</div>
+                <div v-else-if="staffAttendanceLoading" class="card p-3">Loading today's attendance...</div>
+                <div v-else-if="todaysAttendance.length === 0" class="card p-3 text-muted">No attendance entries for today.</div>
+                <div v-else class="card p-3 table-responsive">
+                    <table class="table table-striped align-middle mb-0">
+                        <thead>
+                            <tr><th>Student</th><th>Room</th><th>Band</th><th>Start</th><th>End</th><th>Attendance</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="entry in todaysAttendance" :key="`${entry.bookingId}-${entry.studentId}`">
+                                <td>{{ entry.studentEmail }}</td>
+                                <td>{{ entry.roomName }}</td>
+                                <td>{{ entry.bandName || '-' }}</td>
+                                <td>{{ new Date(entry.startTime).toLocaleTimeString() }}</td>
+                                <td>{{ new Date(entry.endTime).toLocaleTimeString() }}</td>
+                                <td>
+                                    <span class="badge mb-2" :class="entry.attendanceStatus === 'present' ? 'bg-success' : entry.attendanceStatus === 'absent' ? 'bg-danger' : 'bg-secondary'">
+                                        {{ entry.attendanceStatus === 'unmarked' ? 'Unmarked' : entry.attendanceStatus === 'present' ? 'Present' : 'Absent' }}
+                                    </span>
+                                    <div class="btn-group d-flex" role="group" :aria-label="`Attendance controls for ${entry.studentEmail}`">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm"
+                                            :class="entry.attendanceStatus === 'present' ? 'btn-success' : 'btn-outline-success'"
+                                            :disabled="attendanceSaving[getAttendanceKey(entry)]"
+                                            :aria-pressed="entry.attendanceStatus === 'present'"
+                                            @click="setAttendance(entry, 'present')">
+                                            Present
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm"
+                                            :class="entry.attendanceStatus === 'absent' ? 'btn-danger' : 'btn-outline-danger'"
+                                            :disabled="attendanceSaving[getAttendanceKey(entry)]"
+                                            :aria-pressed="entry.attendanceStatus === 'absent'"
+                                            @click="setAttendance(entry, 'absent')">
+                                            Absent
+                                        </button>
+                                    </div>
+                                    <div v-if="attendanceSaving[getAttendanceKey(entry)]" class="small text-muted mt-1">Saving...</div>
+                                    <div v-else-if="attendanceFeedback[getAttendanceKey(entry)]" class="small mt-1" :class="`text-${attendanceFeedback[getAttendanceKey(entry)].type}`">
+                                        {{ attendanceFeedback[getAttendanceKey(entry)].message }}
+                                    </div>
+                                </td>
                             </tr>
                         </tbody>
                     </table>

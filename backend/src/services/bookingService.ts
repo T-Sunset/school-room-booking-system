@@ -8,6 +8,7 @@ import type { User } from "../models/User"
 import { getStudentStrikeStatus } from "./strikeService"
 import { validateBookingInterval } from "./bookingTimePolicy"
 import { bookingIntersectsCalendarDay, getLocalCalendarDayRange } from "./bookingDateRange"
+import type { AttendanceStatus } from "../models/Attendance"
 
 // Create a booking 
 export async function createBooking(input: {room:Room, app:PossibleBooking}, user:User) {
@@ -423,7 +424,10 @@ export type RollcallEntry = {
     bandId?: string,
     bandName?: string,
     startTime: string,
-    endTime: string
+    endTime: string,
+    attendanceStatus: "unmarked" | AttendanceStatus,
+    attendanceUpdatedBy?: string,
+    attendanceUpdatedAt?: string
 }
 
 // Get students currently permitted in the building by approved active bookings.
@@ -445,7 +449,44 @@ export async function getRollcall(user: User): Promise<RollcallEntry[]> {
         .map((doc) => ({ id: doc.id, ...doc.data() } as BookingRequest))
         .filter((booking) => new Date(booking.startTime) <= now && new Date(booking.endTime) > now)
 
-    const entries = await Promise.all(activeBookings.flatMap(async (booking) => {
+    return enrichRollcallAttendance(await expandBookingsToRollcallEntries(activeBookings))
+}
+
+// Get students from approved bookings that started today and remain editable.
+export async function getTodayAttendance(user: User): Promise<RollcallEntry[]> {
+    if (user.role !== "teacher" && user.role !== "admin") {
+        throw new Error("Only teachers and administrators can view Today's Attendance.")
+    }
+    if (typeof user.schoolId !== "string" || !user.schoolId.trim()) {
+        throw new Error("User is not assigned to a valid school.")
+    }
+
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+    const todayRange = getLocalCalendarDayRange(today)
+    const snapshot = await db.collection("bookings")
+        .where("schoolId", "==", user.schoolId)
+        .where("status", "==", "approved")
+        .get()
+
+    const todayBookings = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() } as BookingRequest))
+        .filter((booking) => {
+            const bookingStart = new Date(booking.startTime)
+            if (Number.isNaN(bookingStart.getTime())) return false
+
+            const bookingDay = getLocalCalendarDayRange(
+                `${bookingStart.getFullYear()}-${String(bookingStart.getMonth() + 1).padStart(2, "0")}-${String(bookingStart.getDate()).padStart(2, "0")}`
+            )
+            return bookingDay.start.getTime() === todayRange.start.getTime() &&
+                bookingStart <= now && now < bookingDay.end
+        })
+
+    return enrichRollcallAttendance(await expandBookingsToRollcallEntries(todayBookings))
+}
+
+async function expandBookingsToRollcallEntries(bookings: BookingRequest[]): Promise<RollcallEntry[]> {
+    const entries = await Promise.all(bookings.flatMap(async (booking) => {
         const [roomSnapshot, bandSnapshot] = await Promise.all([
             db.collection("rooms").doc(booking.roomId).get(),
             booking.type === "band" && booking.bandId
@@ -474,12 +515,49 @@ export async function getRollcall(user: User): Promise<RollcallEntry[]> {
                 bandId: booking.bandId,
                 bandName: band?.name,
                 startTime: booking.startTime,
-                endTime: booking.endTime
+                endTime: booking.endTime,
+                attendanceStatus: "unmarked"
             }
         }))
     }))
 
     return entries.flat().filter((entry): entry is RollcallEntry => entry !== null).sort((first, second) => first.roomName.localeCompare(second.roomName) || first.studentEmail.localeCompare(second.studentEmail))
+}
+
+async function enrichRollcallAttendance(entries: RollcallEntry[]): Promise<RollcallEntry[]> {
+    const attendanceRefs = new Map<string, any>()
+    entries.forEach((entry) => {
+        const key = `${entry.bookingId}:${entry.studentId}`
+        if (!attendanceRefs.has(key)) {
+            attendanceRefs.set(key, db.collection("bookings").doc(entry.bookingId).collection("attendance").doc(entry.studentId))
+        }
+    })
+
+    const attendanceByKey = new Map<string, { status: "present" | "absent", updatedBy?: string, updatedAt?: string }>()
+    if (attendanceRefs.size > 0) {
+        const attendanceSnapshots = await db.getAll(...attendanceRefs.values())
+        attendanceSnapshots.forEach((attendanceSnapshot, index) => {
+            if (!attendanceSnapshot.exists) return
+            const attendance = attendanceSnapshot.data()
+            if (attendance?.status !== "present" && attendance?.status !== "absent") return
+            const key = [...attendanceRefs.keys()][index]
+            attendanceByKey.set(key, {
+                status: attendance.status,
+                updatedBy: attendance.updatedBy,
+                updatedAt: attendance.updatedAt
+            })
+        })
+    }
+
+    return entries.map((entry) => {
+        const attendance = attendanceByKey.get(`${entry.bookingId}:${entry.studentId}`)
+        return {
+            ...entry,
+            attendanceStatus: attendance?.status || "unmarked",
+            attendanceUpdatedBy: attendance?.updatedBy,
+            attendanceUpdatedAt: attendance?.updatedAt
+        }
+    })
 }
 
 async function enrichBookings(bookings: BookingRequest[]): Promise<BookingRequest[]> {
