@@ -3,6 +3,7 @@ import { db } from "../config/firebase"
 import { Band } from "../models/Band"
 import { canApproveBooking } from "../rbac/can"
 import type { User } from "../models/User"
+import { logAuditEvent } from "./auditService"
 
 export function normaliseBandMemberIds(input: unknown, creatorId: string): string[] {
     const rawMembers = Array.isArray(input) ? input : []
@@ -158,6 +159,22 @@ export async function createBand(input: Partial<Band>, user: User) {
         transaction.create(docRef, bandData)
     })
 
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "band.created",
+            entityType: "band",
+            entityId: docRef.id,
+            metadata: {
+                bandName: name,
+                memberCount: validMemberIds.length,
+                status
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write band creation audit event:", error)
+    }
+
     return {
         id: docRef.id,
         schoolId,
@@ -197,6 +214,20 @@ export async function approveBand(bandId:string, user:User) {
         approvedBy:user.id,
         approvedAt:new Date().toISOString()
     })
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "band.approved",
+            entityType: "band",
+            entityId: bandId,
+            metadata: {
+                previousStatus: band.status,
+                newStatus: "approved"
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write band approval audit event:", error)
+    }
 }
 // Deny a Band 
 export async function denyBand(bandId:string, user:User) {
@@ -225,6 +256,20 @@ export async function denyBand(bandId:string, user:User) {
         approvedBy:user.id,
         approvedAt:new Date().toISOString()
     })
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "band.denied",
+            entityType: "band",
+            entityId: bandId,
+            metadata: {
+                previousStatus: band.status,
+                newStatus: "denied"
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write band denial audit event:", error)
+    }
 }
 
 // Get pending bands 
@@ -322,6 +367,20 @@ export async function disbandBand(bandId: string, user: User) {
 
     const disbandedAt = new Date().toISOString()
     await ref.update({ status: "disbanded", disbandedAt })
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "band.disbanded",
+            entityType: "band",
+            entityId: bandId,
+            metadata: {
+                previousStatus: band.status,
+                newStatus: "disbanded"
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write band disband audit event:", error)
+    }
     return { status: "disbanded" as const }
 }
 
@@ -359,6 +418,21 @@ export async function leaveBand(bandId: string, user: User) {
     }
 
     await ref.update(update)
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "band.member_left",
+            entityType: "band",
+            entityId: bandId,
+            metadata: {
+                previousStatus: band.status,
+                newStatus: update.status ?? "approved",
+                remainingMemberCount: remainingMembers.length
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write band member leave audit event:", error)
+    }
     return { status: update.status ?? "approved" as const }
 }
 

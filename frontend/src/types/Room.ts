@@ -21,7 +21,9 @@ export type Room = {
         agreement:string // What do people who try to book this room have to agree to to do so?
     },
     createdBy:string,
-    createdAt:string
+    createdAt:string,
+    deactivatedAt?:string,
+    deactivatedBy?:string
 }
 
 export type RoomAvailabilityCell = {

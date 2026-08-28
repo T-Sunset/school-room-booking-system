@@ -6,6 +6,7 @@ import { canCreateBooking, canApproveBooking, canOverrideRules, canManageStudent
 import { UserRole } from "../models/User"
 import { getStrikeStatusFromStrikes } from "./strikeService"
 import type { Strike } from "../models/Strike"
+import { logAuditEvent } from "./auditService"
 
 // Get a User by their UID from firebase firestore 
 export async function getUserById(uid:string): Promise<User|null> {
@@ -56,7 +57,7 @@ export async function createUser(input:{yearLevel:string}, user:User) {
     const createdAt = new Date().toISOString()
     
     // Create Firestore entry
-    userRef.set({
+    await userRef.set({
         id,
         email,
         yearLevel,
@@ -64,6 +65,18 @@ export async function createUser(input:{yearLevel:string}, user:User) {
         schoolId,
         role:"student"
     })
+
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "user.profile_created",
+            entityType: "user",
+            entityId: id,
+            metadata: { yearLevel, role: "student" }
+        })
+    } catch (error) {
+        console.error("Failed to write user profile creation audit event:", error)
+    }
 
     // Done! Return
     return {
@@ -77,25 +90,41 @@ export async function createUser(input:{yearLevel:string}, user:User) {
 }
 
 // Change a user's role
-export async function changeUserRole(userId:string, role:UserRole, user:User) {
+export async function changeUserRole(userId:string, role:unknown, user:User) {
     // Ensure Valid Rights
     if (!canOverrideRules(user.role)) throw new Error("Unauthorised to edit user permissions.")
+    if (typeof user.schoolId !== "string" || !user.schoolId.trim()) throw new Error("User is not assigned to a valid school.")
+    if (!userId || !userId.trim()) throw new Error("Invalid user ID.")
+    if (userId === user.id) throw new Error("Users cannot change their own role.")
+    if (role !== "student" && role !== "teacher" && role !== "admin") throw new Error("Invalid user role.")
     
     // Fetch the user 
     const ref = db.collection("users").doc(userId)
-    const snap = await ref.get()
+    return db.runTransaction(async (transaction) => {
+        const snap = await transaction.get(ref)
+        if (!snap.exists) throw new Error("User not found.")
 
-    // Does the user exist?
-    if (!snap.exists) {
-        throw new Error("User not found.")
-    }
+        const target = snap.data() as User
+        if (target.schoolId !== user.schoolId) throw new Error("Unauthorised for this school.")
+        if (target.role !== "student" && target.role !== "teacher" && target.role !== "admin") {
+            throw new Error("Target user has an invalid current role.")
+        }
+        if (target.role === role) return { status: "unchanged" as const, role }
 
-    // Get user snapshot to data 
-    const u = snap.data()
+        transaction.update(ref, { role })
+        await logAuditEvent({
+            actor: user,
+            action: "user.role_changed",
+            entityType: "user",
+            entityId: userId,
+            metadata: {
+                targetUserId: userId,
+                previousRole: target.role,
+                newRole: role
+            }
+        }, transaction)
 
-    // Set values 
-    await ref.update({
-        role
+        return { status: "updated" as const, role }
     })
 }
 

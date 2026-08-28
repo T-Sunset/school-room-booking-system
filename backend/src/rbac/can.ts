@@ -18,3 +18,6 @@ export function canManageStudents(role: UserRole) {
 export function canRecordAttendance(role: UserRole) {
     return permissions[role].recordAttendance
 }
+export function canViewAuditLogs(role: UserRole) {
+    return permissions[role].viewAuditLogs
+}

@@ -41,6 +41,12 @@ export async function updateRoom(input:Room) {
     return response.data.success
 }
 
+// Deactivate a room without removing its historical record.
+export async function deactivateRoom(roomId:string): Promise<"deactivated" | "already_inactive"> {
+    const response = await api.delete(`/rooms/${roomId}`)
+    return response.data.status
+}
+
 // Get the current week's hourly availability for a room.
 export async function getRoomAvailability(input:string | string[]): Promise<RoomAvailabilityCell[]> {
     const response = await api.get(`/rooms/${input}/availability`)

@@ -9,6 +9,7 @@ import { getStudentStrikeStatus } from "./strikeService"
 import { validateBookingInterval } from "./bookingTimePolicy"
 import { bookingIntersectsCalendarDay, getLocalCalendarDayRange } from "./bookingDateRange"
 import type { AttendanceStatus } from "../models/Attendance"
+import { logAuditEvent } from "./auditService"
 
 // Create a booking 
 export async function createBooking(input: {room:Room, app:PossibleBooking}, user:User) {
@@ -43,6 +44,7 @@ export async function createBooking(input: {room:Room, app:PossibleBooking}, use
     if (!roomSnap.exists) { throw new Error("Room not found.") }
     const room = roomSnap.data()
     if (room.schoolId !== user.schoolId) { throw new Error("Not authorised for this room.") }
+    if (!room.isBookable) { throw new Error("Room is not bookable.") }
 
     if (!roomId || !userId || !startTime || !endTime || !type) {
         throw new Error("Missing required fields.")
@@ -76,11 +78,6 @@ export async function createBooking(input: {room:Room, app:PossibleBooking}, use
         const strikeStatus = await getStudentStrikeStatus(user.id, user.schoolId)
         if (strikeStatus.isBanned) {
             throw new Error(`You are still banned until ${strikeStatus.banExpiresAt} and cannot make new bookings.`)
-        }
-
-        // Is the room bookable?
-        if (!room.isBookable) {
-            throw new Error("Room is not bookable.")
         }
 
         const now = new Date()
@@ -144,6 +141,24 @@ export async function createBooking(input: {room:Room, app:PossibleBooking}, use
         schoolId,
         createdAt
     })
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "booking.created",
+            entityType: "booking",
+            entityId: docRef.id,
+            metadata: {
+                bookingType: type,
+                roomId,
+                roomName: room.name,
+                startTime,
+                endTime,
+                ...(bandId ? { bandId } : {})
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write booking creation audit event:", error)
+    }
     // Return OK!
     return {
         id: docRef.id,
@@ -300,6 +315,20 @@ export async function approveBooking(bookingId: string, user:User) {
         approvedBy:user.id,
         approvedAt:new Date().toISOString()
     })
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "booking.approved",
+            entityType: "booking",
+            entityId: bookingId,
+            metadata: {
+                previousStatus: booking.status,
+                newStatus: "approved"
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write booking approval audit event:", error)
+    }
 }
 // Deny a Booking 
 export async function denyBooking(bookingId:string, user:User) {
@@ -328,6 +357,20 @@ export async function denyBooking(bookingId:string, user:User) {
         approvedBy:user.id,
         approvedAt:new Date().toISOString()
     })
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "booking.denied",
+            entityType: "booking",
+            entityId: bookingId,
+            metadata: {
+                previousStatus: booking.status,
+                newStatus: "denied"
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write booking denial audit event:", error)
+    }
 }
 
 // Get pending bookings 

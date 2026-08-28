@@ -4,6 +4,7 @@ import type { BookingRequest } from "../models/BookingRequest"
 import type { User } from "../models/User"
 import { canRecordAttendance } from "../rbac/can"
 import { getLocalCalendarDayRange } from "./bookingDateRange"
+import { logAuditEvent } from "./auditService"
 
 export type AttendanceUpdateResponse = {
     studentId: string,
@@ -86,6 +87,9 @@ export async function recordAttendance(
 
     const attendanceReference = bookingReference.collection("attendance").doc(studentId)
     const existingSnapshot = await attendanceReference.get()
+    const previousStatus = existingSnapshot.exists
+        ? (existingSnapshot.data()?.status as AttendanceStatus | undefined)
+        : undefined
     const updatedAt = now.toISOString()
     if (existingSnapshot.exists) {
         await attendanceReference.set({
@@ -104,6 +108,35 @@ export async function recordAttendance(
             updatedAt
         }
         await attendanceReference.set(attendance)
+    }
+
+    const isInitialMark = !existingSnapshot.exists
+    const isStatusChange = existingSnapshot.exists &&
+        (previousStatus === "present" || previousStatus === "absent") &&
+        previousStatus !== status
+    if (isInitialMark || isStatusChange) {
+        try {
+            await logAuditEvent({
+                actor: user,
+                action: isInitialMark ? "attendance.marked" : "attendance.changed",
+                entityType: "attendance",
+                entityId: `${bookingId}/${studentId}`,
+                metadata: isInitialMark
+                    ? {
+                        bookingId,
+                        studentId,
+                        newStatus: status
+                    }
+                    : {
+                        bookingId,
+                        studentId,
+                        previousStatus: previousStatus as AttendanceStatus,
+                        newStatus: status
+                    }
+            })
+        } catch (error) {
+            console.error("Failed to write attendance audit event:", error)
+        }
     }
 
     return {
