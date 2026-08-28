@@ -5,6 +5,7 @@ import { canCreateBooking, canOverrideRules } from "../rbac/can"
 import { RULES } from "../models/Rules"
 import type { User } from "../models/User"
 import { BookingRequest, isOverlapping, PossibleBooking } from "../models/BookingRequest"
+import { BOOKING_BLOCK_MINUTES, parseBookingInterval, validateBookingInterval } from "./bookingTimePolicy"
 
 // Create a Room
 export async function createRoom(input:Room, user:User) {
@@ -179,7 +180,7 @@ export async function getRooms(user:User) {
     })
 }
 
-export function getNextAvailable(room: Room, bookings: BookingRequest[], now: Date): string | null {
+export function getNextAvailable(room: Room, bookings: BookingRequest[], now: Date, durationMinutes = 60): string | null {
     if (!room.isBookable) return null
 
     for (let dayOffset = 0; dayOffset <= 14; dayOffset++) {
@@ -189,14 +190,18 @@ export function getNextAvailable(room: Room, bookings: BookingRequest[], now: Da
 
         if (!room.rules.allowedDays.includes(candidateDay.getDay())) continue
         if (dayOffset === 0 && candidateDay < now) {
-            candidateDay.setTime(now.getTime())
-            candidateDay.setMinutes(0, 0, 0)
-            if (candidateDay < now) candidateDay.setHours(candidateDay.getHours() + 1)
+            const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60
+            const nextBoundary = Math.ceil(minutesSinceMidnight / BOOKING_BLOCK_MINUTES) * BOOKING_BLOCK_MINUTES
+            candidateDay.setHours(Math.floor(nextBoundary / 60), nextBoundary % 60, 0, 0)
         }
 
         const candidateEnd = new Date(candidateDay)
-        candidateEnd.setHours(candidateDay.getHours() + 1)
-        if (candidateEnd.getHours() > room.rules.closeHour || candidateEnd > new Date(candidateDay.getFullYear(), candidateDay.getMonth(), candidateDay.getDate() + 1)) continue
+        candidateEnd.setMinutes(candidateEnd.getMinutes() + durationMinutes)
+        try {
+            validateBookingInterval(candidateDay.toISOString(), candidateEnd.toISOString(), room.rules)
+        } catch {
+            continue
+        }
 
         const overlaps = bookings.some(booking => isOverlapping(
             candidateDay,
@@ -217,6 +222,47 @@ export type RoomAvailabilityCell = {
     startTime: string,
     endTime: string,
     status: "available" | "booked" | "unavailable"
+}
+
+export function buildRoomAvailabilityCells(room: Room, approvedBookings: BookingRequest[], today = new Date()): RoomAvailabilityCell[] {
+    const startOfWeek = new Date(today)
+    startOfWeek.setDate(today.getDate() - today.getDay())
+    startOfWeek.setHours(0, 0, 0, 0)
+    const cells: RoomAvailabilityCell[] = []
+
+    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+        const date = new Date(startOfWeek)
+        date.setDate(startOfWeek.getDate() + dayOffset)
+        const isAllowedDay = room.rules.allowedDays.includes(date.getDay())
+
+        for (let hour = room.rules.openHour; hour < room.rules.closeHour; hour += 0.5) {
+            const startTime = new Date(date)
+            startTime.setHours(Math.floor(hour), hour % 1 === 0.5 ? 30 : 0, 0, 0)
+            const endTime = new Date(startTime)
+            endTime.setMinutes(endTime.getMinutes() + BOOKING_BLOCK_MINUTES)
+            const booked = approvedBookings.some((booking) => isOverlapping(
+                startTime,
+                endTime,
+                new Date(booking.startTime),
+                new Date(booking.endTime)
+            ))
+
+            cells.push({
+                date: startTime.toISOString().slice(0, 10),
+                day: date.getDay(),
+                hour,
+                startTime: startTime.toISOString(),
+                endTime: endTime.toISOString(),
+                status: !room.isBookable || !isAllowedDay
+                    ? "unavailable"
+                    : booked
+                        ? "booked"
+                        : "available"
+            })
+        }
+    }
+
+    return cells
 }
 
 export async function getRoomAvailability(roomId: string, user: User): Promise<RoomAvailabilityCell[]> {
@@ -241,45 +287,7 @@ export async function getRoomAvailability(roomId: string, user: User): Promise<R
         .get()
     const approvedBookings = bookingSnapshot.docs.map((doc) => doc.data() as BookingRequest)
 
-    const today = new Date()
-    const startOfWeek = new Date(today)
-    startOfWeek.setDate(today.getDate() - today.getDay())
-    startOfWeek.setHours(0, 0, 0, 0)
-    const cells: RoomAvailabilityCell[] = []
-
-    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-        const date = new Date(startOfWeek)
-        date.setDate(startOfWeek.getDate() + dayOffset)
-        const isAllowedDay = room.rules.allowedDays.includes(date.getDay())
-
-        for (let hour = room.rules.openHour; hour < room.rules.closeHour; hour++) {
-            const startTime = new Date(date)
-            startTime.setHours(hour, 0, 0, 0)
-            const endTime = new Date(startTime)
-            endTime.setHours(hour + 1, 0, 0, 0)
-            const booked = approvedBookings.some((booking) => isOverlapping(
-                startTime,
-                endTime,
-                new Date(booking.startTime),
-                new Date(booking.endTime)
-            ))
-
-            cells.push({
-                date: startTime.toISOString().slice(0, 10),
-                day: date.getDay(),
-                hour,
-                startTime: startTime.toISOString(),
-                endTime: endTime.toISOString(),
-                status: !room.isBookable || !isAllowedDay
-                    ? "unavailable"
-                    : booked
-                        ? "booked"
-                        : "available"
-            })
-        }
-    }
-
-    return cells
+    return buildRoomAvailabilityCells(room, approvedBookings)
 }
 
 // Get a Single Room
@@ -313,10 +321,9 @@ export async function getRoomWithRequirements(input:PossibleBooking, user:User) 
     if (!canCreateBooking(user.role)) {throw new Error("Unauthorised to view rooms.")}
 
     // Convert times to valid data types
-    const start = new Date(input.startTime)
-    const end = new Date(input.endTime)
-    const startHour = start.getHours()
-    const endHour = end.getHours()
+    const { start, end } = parseBookingInterval(input.startTime, input.endTime)
+    const startMinutes = start.getHours() * 60 + start.getMinutes()
+    const endMinutes = end.getHours() * 60 + end.getMinutes()
     const weekday = start.getDay()
 
     // Get a snapshot of the Database all rooms that are open during that time & bookable
@@ -334,10 +341,18 @@ export async function getRoomWithRequirements(input:PossibleBooking, user:User) 
         })) as Room[]
 
     // Filter that array to only Rooms that are bookable by the user (based on weekday & year level)
-    const eligibleRooms = rooms.filter(room => room.rules.allowedDays.includes(weekday) && 
+    const eligibleRooms = rooms.filter(room => {
+        try {
+            validateBookingInterval(input.startTime, input.endTime, room.rules)
+        } catch {
+            return false
+        }
+
+        return room.rules.allowedDays.includes(weekday) &&
         room.rules.allowedYearLevels.includes(Number(user.yearLevel)) &&
-        room.rules.openHour <= startHour &&
-        room.rules.closeHour >= endHour)
+        room.rules.openHour * 60 <= startMinutes &&
+        room.rules.closeHour * 60 >= endMinutes
+    })
 
     // Get the IDs of all eligible rooms
     const eligibleIds = new Set(eligibleRooms.map(room => room.id))

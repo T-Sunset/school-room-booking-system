@@ -1,7 +1,7 @@
 // index.ts
 import express, {Request, Response} from "express"
 import cors from "cors"
-import {approveBooking, createBooking, denyBooking, getPendingBookings, getRollcall, getUserBookings} from "./services/bookingService"
+import {approveBooking, createBooking, denyBooking, getPendingBookings, getRollcall, getSchoolBookingsForDate, getUserBookings} from "./services/bookingService"
 import { createBand, approveBand, denyBand, disbandBand, getActiveBands, getBandsForUser, getPendingBands, leaveBand } from "./services/bandService"
 import { authMiddleware, authTokenOnly } from "./middleware/authMiddleware"
 import { AuthenticatedRequest } from "./types/auth"
@@ -123,6 +123,19 @@ app.get("/bookings/pending", authMiddleware, async(req:AuthenticatedRequest, res
         return res.status(400).json({
             error:err.message
         })
+    }
+})
+// View all school bookings intersecting a requested local calendar date.
+app.get("/bookings/school", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const date = req.query.date
+        if (typeof date !== "string") {
+            return res.status(400).json({ error:"A date in YYYY-MM-DD format is required." })
+        }
+        const result = await getSchoolBookingsForDate(req.user, date)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
     }
 })
 // Approve Booking 
