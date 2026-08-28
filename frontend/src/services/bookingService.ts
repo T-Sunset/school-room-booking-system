@@ -2,7 +2,7 @@
 import api from './api'
 import type { Room } from '../types/Room'
 import type { PossibleBooking } from '../types/Booking'
-import type { BookingRequest, RollcallEntry } from '../types/Booking'
+import type { AttendanceUpdateRequest, AttendanceUpdateResponse, BookingRequest, RollcallEntry } from '../types/Booking'
 
 export type BookingActionResponse = {
     success: boolean
@@ -48,5 +48,21 @@ export async function denyBooking(bookingId: string): Promise<BookingActionRespo
 // Get the current authoritative Rollcall for staff.
 export async function getRollcall(): Promise<RollcallEntry[]> {
     const response = await api.get("/rollcall")
+    return response.data
+}
+
+// Get today's attendance entries for staff.
+export async function getTodayAttendance(): Promise<RollcallEntry[]> {
+    const response = await api.get("/rollcall/today")
+    return response.data
+}
+
+// Update attendance for one student in one booking.
+export async function updateAttendance(
+    bookingId: string,
+    studentId: string,
+    input: AttendanceUpdateRequest
+): Promise<AttendanceUpdateResponse> {
+    const response = await api.patch(`/rollcall/${bookingId}/${studentId}/attendance`, input)
     return response.data
 }

@@ -5,18 +5,21 @@ export const permissions = {
         createBooking: true,
         approveBooking: false,
         overrideRules: false,
-        manageStudents: false
+        manageStudents: false,
+        recordAttendance: false
     },
     teacher: {
         createBooking: true,
         approveBooking: true,
         overrideRules: false,
-        manageStudents: true
+        manageStudents: true,
+        recordAttendance: true
     },
     admin: {
         createBooking: true,
         approveBooking: true,
         overrideRules: true,
-        manageStudents: true
+        manageStudents: true,
+        recordAttendance: true
     }
 } as const

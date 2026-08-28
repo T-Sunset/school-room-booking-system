@@ -1,13 +1,14 @@
 // index.ts
 import express, {Request, Response} from "express"
 import cors from "cors"
-import {approveBooking, createBooking, denyBooking, getPendingBookings, getRollcall, getSchoolBookingsForDate, getUserBookings} from "./services/bookingService"
+import {approveBooking, createBooking, denyBooking, getPendingBookings, getRollcall, getSchoolBookingsForDate, getTodayAttendance, getUserBookings} from "./services/bookingService"
 import { createBand, approveBand, denyBand, disbandBand, getActiveBands, getBandsForUser, getPendingBands, leaveBand } from "./services/bandService"
 import { authMiddleware, authTokenOnly } from "./middleware/authMiddleware"
 import { AuthenticatedRequest } from "./types/auth"
 import { createRoom, editRoom, getRooms, getRoomAvailability, getRoomSingle, getRoomWithRequirements, removeRoom } from "./services/roomService"
 import { changeUserRole, createUser, getSchoolStudents, getStudentRoster, getSpecificUser, getUsers } from "./services/userService"
 import { getStudentStrikeStatus, issueBandStrike, issueStrike } from "./services/strikeService"
+import { recordAttendance } from "./services/attendanceService"
 
 // Set up the Express app and middleware
 const app = express()
@@ -502,6 +503,28 @@ app.get("/bookings/mine", authMiddleware, async(req:AuthenticatedRequest, res:Re
 app.get("/rollcall", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
     try {
         const result = await getRollcall(req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
+})
+// View today's attendance entries for staff, including bookings that have ended today.
+app.get("/rollcall/today", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const result = await getTodayAttendance(req.user)
+        return res.json(result)
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
+})
+// Record attendance for one student in one approved booking.
+app.patch("/rollcall/:bookingId/:studentId/attendance", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const { bookingId, studentId } = req.params
+        if (typeof bookingId !== "string" || typeof studentId !== "string") {
+            return res.status(400).json({ error:"Invalid booking or student ID." })
+        }
+        const result = await recordAttendance(bookingId, studentId, req.body?.status, req.user)
         return res.json(result)
     } catch (err) {
         return res.status(400).json({ error:err.message })

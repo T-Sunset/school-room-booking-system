@@ -11,6 +11,20 @@ export type BookingStatus =
 // Booking types
 export type BookingType = "solo" | "band"
 
+export type AttendanceStatus = "unmarked" | "present" | "absent"
+export type AttendanceUpdateStatus = Exclude<AttendanceStatus, "unmarked">
+
+export type AttendanceUpdateRequest = {
+    status: AttendanceUpdateStatus
+}
+
+export type AttendanceUpdateResponse = {
+    studentId: string,
+    status: AttendanceUpdateStatus,
+    updatedBy: string,
+    updatedAt: string
+}
+
 // Define booking(s)
 export type BookingRequest = {
     id: string,
@@ -63,5 +77,8 @@ export interface RollcallEntry {
     bandId?: string,
     bandName?: string,
     startTime: string,
-    endTime: string
+    endTime: string,
+    attendanceStatus: AttendanceStatus,
+    attendanceUpdatedBy?: string,
+    attendanceUpdatedAt?: string
 }
