@@ -87,14 +87,14 @@
 
 <template>
     <div class="modal-backdrop-custom">
-        <div class="modal-dialog-custom">
-            <div class="card p-4">
+        <div class="modal-dialog-custom" role="dialog" aria-modal="true" aria-labelledby="band-modal-title">
+            <div class="card p-4 modal-card">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h4 class="mb-0">Create Band</h4>
+                    <h4 id="band-modal-title" class="mb-0">Create Band</h4>
                     <button type="button" class="btn-close" aria-label="Close" :disabled="submitting" @click="emit('close')"></button>
                 </div>
 
-                <form @submit.prevent="submit">
+                <form class="modal-form" @submit.prevent="submit">
                     <div v-if="error" class="alert alert-danger">{{ error }}</div>
 
                     <div class="mb-3">
@@ -107,9 +107,9 @@
                         <input id="student-search" v-model="searchTerm" class="form-control" type="search" placeholder="Search by email" :disabled="submitting || loadingStudents" />
                     </div>
 
-                    <div class="border rounded p-2 mb-3" style="max-height: 180px; overflow-y: auto;">
-                        <div v-if="loadingStudents" class="text-muted">Loading students...</div>
-                        <div v-else-if="filteredStudents.length === 0" class="text-muted">No students found.</div>
+                    <div class="border rounded p-2 mb-3 modal-list-scroll">
+                        <div v-if="loadingStudents" class="loading-state" role="status">Loading students...</div>
+                        <div v-else-if="filteredStudents.length === 0" class="empty-state">No students found.</div>
                         <button
                             v-for="student in filteredStudents"
                             v-else
@@ -129,7 +129,7 @@
                         <ul class="list-group">
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <span>{{ props.creatorEmail }} (you)</span>
-                                <span class="badge text-bg-secondary">Creator</span>
+                                <span class="status-badge status-neutral">Creator</span>
                             </li>
                             <li v-for="student in selectedStudents" :key="student.id" class="list-group-item d-flex justify-content-between align-items-center">
                                 <span>{{ student.email }}</span>
@@ -166,3 +166,4 @@
     max-width: 92%;
 }
 </style>
+

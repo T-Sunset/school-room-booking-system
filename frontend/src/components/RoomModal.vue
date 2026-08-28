@@ -93,10 +93,10 @@
 
 <template>
     <div class="modal-backdrop-custom">
-        <div class="modal-dialog-custom">
-            <div class="card p-4">
+        <div class="modal-dialog-custom" role="dialog" aria-modal="true" aria-labelledby="room-modal-title">
+            <div class="card p-4 modal-card">
                 <!-- Header -->
-                 <h4>Create/Edit Room</h4>
+                 <h4 id="room-modal-title">Create/Edit Room</h4>
 
                  <!-- Room Create / Edit Form -->
                   <!-- Get the Room's Name -->
@@ -180,10 +180,9 @@
                             <textarea
                                 id="agreement"
                                 v-model="room.rules.agreement"
-                                class="form-control"
+                                class="form-control form-textarea-resizable"
                                 rows="6"
                                 placeholder="Enter room usage agreement. Must be agreed to to book this room."
-                                style="resize:vertical"
                                 maxlength="2000"></textarea>
                                 <small class="text-muted">
                                     {{ room.rules.agreement.length }}/2000 characters
@@ -223,3 +222,4 @@
     max-width: 90%;
 }
 </style>
+

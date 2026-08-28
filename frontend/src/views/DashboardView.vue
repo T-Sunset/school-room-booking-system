@@ -230,7 +230,7 @@
             You have received a strike. This is currently a warning; you are not banned from making bookings.
         </div>
         <div v-if="dashboardError" class="alert alert-danger" role="alert">{{ dashboardError }}</div>
-        <div v-else-if="dashboardLoading" class="card p-3 mb-4">Loading Dashboard data...</div>
+        <div v-else-if="dashboardLoading" class="loading-state mb-4" role="status">Loading Dashboard data...</div>
 
         <div v-if="authStore.role === 'student'" class="row g-3 mb-4">
             <div class="col-md-4">
@@ -256,10 +256,10 @@
         <div v-if="authStore.role === 'student'" class="row g-4">
             <section class="col-12">
                 <div class="card p-3">
-                    <h4 class="mb-3">This Week's Bookings</h4>
-                    <div v-if="myBookingsThisWeek.length === 0" class="text-muted">No bookings this week.</div>
+                    <h4 class="section-heading">This Week's Bookings</h4>
+                    <div v-if="myBookingsThisWeek.length === 0" class="empty-state">No bookings this week.</div>
                     <div v-else class="table-responsive">
-                        <table class="table table-striped mb-0">
+                        <table class="table table-striped table-sm data-table mb-0">
                             <thead>
                                 <tr><th>Date</th><th>Room</th><th>Band</th><th>Start</th><th>End</th><th>Timing</th><th>Status</th></tr>
                             </thead>
@@ -303,14 +303,14 @@
 
         <div v-if="isStaff" class="row g-4">
             <section class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="section-header">
                     <h2 class="h4 mb-0">Today's Bookings</h2>
                 </div>
-                <div v-if="staffBookingsError" class="alert alert-danger">{{ staffBookingsError }}</div>
-                <div v-else-if="staffBookingsLoading" class="card p-3">Loading today's bookings...</div>
-                <div v-else-if="todaysBookings.length === 0" class="card p-3 text-muted">No bookings today.</div>
-                <div v-else class="card p-3 table-responsive">
-                    <table class="table table-striped align-middle mb-0">
+                <div v-if="staffBookingsError" class="alert alert-danger" role="alert">{{ staffBookingsError }}</div>
+                <div v-else-if="staffBookingsLoading" class="loading-state" role="status">Loading today's bookings...</div>
+                <div v-else-if="todaysBookings.length === 0" class="empty-state">No bookings today.</div>
+                <div v-else class="card data-card table-responsive">
+                    <table class="table table-striped table-sm data-table align-middle mb-0">
                         <thead>
                             <tr><th>Time</th><th>Room</th><th>Student / Requester</th><th>Band</th><th>Status</th></tr>
                         </thead>
@@ -321,7 +321,7 @@
                                 <td>{{ booking.requesterEmail || "Student unavailable" }}</td>
                                 <td>{{ booking.type === "band" ? (booking.bandName || "Band unavailable") : "-" }}</td>
                                 <td>
-                                    <span class="badge" :class="booking.status === 'approved' ? 'bg-success' : booking.status === 'cancelled' || booking.status === 'denied' ? 'bg-danger' : 'bg-warning text-dark'">
+                                    <span class="status-badge" :class="booking.status === 'approved' ? 'status-approved' : booking.status === 'cancelled' || booking.status === 'denied' ? 'status-danger' : 'status-warning'">
                                         {{ booking.status }}
                                     </span>
                                 </td>
@@ -331,17 +331,17 @@
                 </div>
             </section>
 
-            <section class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+            <section class="col-12 col-xl-6">
+                <div class="section-header">
                     <h2 class="h4 mb-0">Students In the Building:</h2>
                     <button class="btn btn-primary" :disabled="staffRollcallLoading" @click="refreshRollcall">Refresh</button>
                 </div>
                 <p v-if="rollcallLastUpdated" class="text-muted">Last updated: {{ rollcallLastUpdated }}</p>
                 <div v-if="staffRollcallError" class="alert alert-danger">{{ staffRollcallError }}</div>
-                <div v-else-if="staffRollcallLoading" class="card p-3">Loading Rollcall...</div>
-                <div v-else-if="rollcallEntries.length === 0" class="card p-3 text-muted">No students are currently recorded as being allowed in the building.</div>
-                <div v-else class="card p-3 table-responsive">
-                    <table class="table table-striped align-middle mb-0">
+                <div v-else-if="staffRollcallLoading" class="loading-state" role="status">Loading Rollcall...</div>
+                <div v-else-if="rollcallEntries.length === 0" class="empty-state">No students are currently recorded as being allowed in the building.</div>
+                <div v-else class="card data-card table-responsive">
+                    <table class="table table-striped table-sm data-table align-middle mb-0">
                         <thead>
                             <tr><th>Student</th><th>Room</th><th>Band</th><th>Start</th><th>End</th><th>Attendance</th></tr>
                         </thead>
@@ -353,7 +353,7 @@
                                 <td>{{ new Date(entry.startTime).toLocaleTimeString() }}</td>
                                 <td>{{ new Date(entry.endTime).toLocaleTimeString() }}</td>
                                 <td>
-                                    <span class="badge mb-2" :class="entry.attendanceStatus === 'present' ? 'bg-success' : entry.attendanceStatus === 'absent' ? 'bg-danger' : 'bg-secondary'">
+                                    <span class="status-badge mb-2" :class="entry.attendanceStatus === 'present' ? 'status-present' : entry.attendanceStatus === 'absent' ? 'status-absent' : 'status-unmarked'">
                                         {{ entry.attendanceStatus === 'unmarked' ? 'Unmarked' : entry.attendanceStatus === 'present' ? 'Present' : 'Absent' }}
                                     </span>
                                 </td>
@@ -363,17 +363,17 @@
                 </div>
             </section>
 
-            <section class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+            <section class="col-12 col-xl-6">
+                <div class="section-header">
                     <h2 class="h4 mb-0">Today's Attendance</h2>
                     <button class="btn btn-primary" :disabled="staffAttendanceLoading" @click="refreshTodayAttendance">Refresh</button>
                 </div>
                 <p v-if="attendanceLastUpdated" class="text-muted">Last updated: {{ attendanceLastUpdated }}</p>
                 <div v-if="staffAttendanceError" class="alert alert-danger">{{ staffAttendanceError }}</div>
-                <div v-else-if="staffAttendanceLoading" class="card p-3">Loading today's attendance...</div>
-                <div v-else-if="todaysAttendance.length === 0" class="card p-3 text-muted">No attendance entries for today.</div>
-                <div v-else class="card p-3 table-responsive">
-                    <table class="table table-striped align-middle mb-0">
+                <div v-else-if="staffAttendanceLoading" class="loading-state" role="status">Loading today's attendance...</div>
+                <div v-else-if="todaysAttendance.length === 0" class="empty-state">No attendance entries for today.</div>
+                <div v-else class="card data-card table-responsive">
+                    <table class="table table-striped table-sm data-table align-middle mb-0">
                         <thead>
                             <tr><th>Student</th><th>Room</th><th>Band</th><th>Start</th><th>End</th><th>Attendance</th></tr>
                         </thead>
@@ -385,7 +385,7 @@
                                 <td>{{ new Date(entry.startTime).toLocaleTimeString() }}</td>
                                 <td>{{ new Date(entry.endTime).toLocaleTimeString() }}</td>
                                 <td>
-                                    <span class="badge mb-2" :class="entry.attendanceStatus === 'present' ? 'bg-success' : entry.attendanceStatus === 'absent' ? 'bg-danger' : 'bg-secondary'">
+                                    <span class="status-badge mb-2" :class="entry.attendanceStatus === 'present' ? 'status-present' : entry.attendanceStatus === 'absent' ? 'status-absent' : 'status-unmarked'">
                                         {{ entry.attendanceStatus === 'unmarked' ? 'Unmarked' : entry.attendanceStatus === 'present' ? 'Present' : 'Absent' }}
                                     </span>
                                     <div class="btn-group d-flex" role="group" :aria-label="`Attendance controls for ${entry.studentEmail}`">

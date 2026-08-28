@@ -256,15 +256,20 @@
 
 <template>
     <!-- Header -->
-     <h1 class="mb-4">Make a Booking</h1>
+     <div class="view-header">
+        <div>
+            <h1>Make a Booking</h1>
+            <p class="section-description mb-0">Choose a time and find a room that fits.</p>
+        </div>
+     </div>
     <div v-if="pendingBookingsSuccess" class="alert alert-success">{{ pendingBookingsSuccess }}</div>
 
     <!-- Content Row -->
      <div class="row g-3 mb-4">
         <!-- Left Card: Booking Data -->
-        <div class="col-md-4">
-            <div class="card p-3">
-                <h5 class="text-center">Booking Information</h5>
+        <div class="col-lg-5">
+            <div class="card p-3 booking-form-panel">
+                <h2 class="section-heading">Booking Information</h2>
                     <!-- Get the Date -->
                    <div class="row align-items-center mb-3">
                         <label for="date" class="col-sm-4 col-form-label">Booking Date: </label>
@@ -321,14 +326,14 @@
  
 
         <!-- Right Card: Room Selection -->
-        <div class="col-md-4">
-            <div class="card p-3">
-                <h5 class="text-center">Available Rooms</h5>
+        <div class="col-lg-7">
+            <div class="card p-3 table-responsive">
+            <h2 class="section-heading">Available Rooms</h2>
                 <!-- Success Message -->
                 <div v-if="success" class="alert alert-success">{{ success }}</div>
 
                 <!-- Loading Message -->
-                <div v-else-if="loading">
+                <div v-else-if="loading" class="loading-state" role="status">
                     Loading Rooms... Please Wait.
                 </div>
 
@@ -338,7 +343,7 @@
                 </div>
 
                 <!-- Room Display Table -->
-                 <table v-else-if="rooms.length > 0" class="table table-striped">
+                 <table v-else-if="rooms.length > 0" class="table table-striped table-sm data-table">
                     <!-- Column Headers -->
                      <thead>
                         <tr>
@@ -366,9 +371,11 @@
     <BookingModal v-if="selectedRoom && buildPossibleBooking() && rooms.length > 0" @close="closeModal" @accept="getSuccess" :room-data="selectedRoom" :booking-data="buildPossibleBooking()" :band-name="selectedBandName"/>
 
         <section v-if="authStore.role === 'student'" class="mt-4">
-            <h2 class="h4 mb-3">My Bookings</h2>
+            <div class="section-header">
+                <h2 class="h4">My Bookings</h2>
+            </div>
             <div v-if="bookingsError" class="alert alert-danger">{{ bookingsError }}</div>
-            <div v-else-if="bookingsLoading" class="card p-3">Loading your bookings...</div>
+            <div v-else-if="bookingsLoading" class="loading-state" role="status">Loading your bookings...</div>
             <div v-else class="card p-3">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <div class="form-check">
@@ -382,11 +389,11 @@
                     </select>
                 </div>
 
-                <div v-if="displayedBookings.length === 0" class="text-muted">
+                <div v-if="displayedBookings.length === 0" class="empty-state">
                     {{ showBookingHistory ? 'You have no bookings.' : 'You have no upcoming bookings.' }}
                 </div>
                 <div v-else class="table-responsive">
-                    <table class="table table-striped mb-0">
+                    <table class="table table-striped table-sm data-table mb-0">
                         <thead>
                             <tr>
                                 <th>Type</th>
@@ -404,7 +411,7 @@
                                 <td>{{ booking.type === 'band' ? (bandNames[booking.bandId || ''] || "Band unavailable") : "-" }}</td>
                                 <td>{{ new Date(booking.startTime).toLocaleString() }}</td>
                                 <td>{{ new Date(booking.endTime).toLocaleString() }}</td>
-                                <td class="text-capitalize">{{ booking.status }}</td>
+                                <td><span class="status-badge" :class="`status-${booking.status}`">{{ booking.status }}</span></td>
                             </tr>
                         </tbody>
                     </table>
@@ -413,12 +420,14 @@
         </section>
 
         <section v-if="isStaff" class="mt-4">
-            <h2 class="h4 mb-3">Pending Bookings</h2>
+            <div class="section-header">
+                <h2 class="h4">Pending Bookings</h2>
+            </div>
             <div v-if="pendingBookingsError" class="alert alert-danger">{{ pendingBookingsError }}</div>
-            <div v-else-if="pendingBookingsLoading" class="card p-3">Loading pending bookings...</div>
-            <div v-else-if="pendingBookings.length === 0" class="card p-3 text-muted">There are no pending bookings.</div>
-            <div v-else class="card p-3 table-responsive">
-                <table class="table table-striped align-middle mb-0">
+            <div v-else-if="pendingBookingsLoading" class="loading-state" role="status">Loading pending bookings...</div>
+            <div v-else-if="pendingBookings.length === 0" class="empty-state">There are no pending bookings.</div>
+            <div v-else class="card data-card table-responsive">
+                <table class="table table-striped table-sm data-table align-middle mb-0">
                     <thead>
                         <tr>
                             <th>Type</th>
@@ -437,7 +446,7 @@
                             <td>{{ booking.type === 'band' ? (booking.bandName || bandNames[booking.bandId || ''] || 'Band unavailable') : (booking.requesterEmail || userNames[booking.createdBy] || 'Student unavailable') }}</td>
                             <td>{{ new Date(booking.startTime).toLocaleString() }}</td>
                             <td>{{ new Date(booking.endTime).toLocaleString() }}</td>
-                            <td class="text-capitalize">{{ booking.status }}</td>
+                            <td><span class="status-badge" :class="`status-${booking.status}`">{{ booking.status }}</span></td>
                             <td>
                                 <button class="btn btn-sm btn-success me-2" :disabled="bookingActionId !== ''" @click="approvePendingBooking(booking)">Approve</button>
                                 <button class="btn btn-sm btn-danger" :disabled="bookingActionId !== ''" @click="denyPendingBooking(booking)">Deny</button>

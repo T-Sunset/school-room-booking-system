@@ -4,6 +4,7 @@ import App from './App.vue'
 
 // Bootstrap -- Style & Arrangement 
 import 'bootstrap/dist/css/bootstrap.min.css'
+import './style.css'
 import 'bootstrap'
 
 // Pinia -- State Management between Components 
