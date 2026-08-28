@@ -62,6 +62,12 @@
     // Get rooms list 
     const rooms = ref<Room[]>([])
     const selectedRoom = ref<Room|null>()
+    const startTimeMinimum = computed(() => selectedRoom.value?.rules.openHour ?? 0)
+    const startTimeMaximum = computed(() => (selectedRoom.value?.rules.closeHour ?? 24) - 0.5)
+    const maximumDurationHours = computed(() => {
+        if (!selectedRoom.value) return 24
+        return Math.min(selectedRoom.value.rules.maxBookingHours, selectedRoom.value.rules.closeHour - bookStartTime.value)
+    })
 
     // Start Function
     onMounted(async ()=> {
@@ -165,17 +171,24 @@
     // Build a 'PossibleBooking' from our form data
     function buildPossibleBooking() : PossibleBooking | null {
         try {
-            // Create a Date from the 'date' input 
-            const startTime = new Date(bookDate.value)
+            const [year, month, day] = bookDate.value.split("-").map(Number)
+            if (!year || !month || !day || !Number.isInteger(bookStartTime.value * 2) || !Number.isInteger(bookDuration.value * 2)) {
+                return null
+            }
 
-            // Set the starting hour
-            startTime.setHours(bookStartTime.value,0,0,0)
+            const startTime = new Date(year, month - 1, day)
+            if (startTime.getFullYear() !== year || startTime.getMonth() !== month - 1 || startTime.getDate() !== day) {
+                return null
+            }
+
+            const startHour = Math.floor(bookStartTime.value)
+            const startMinute = (bookStartTime.value - startHour) * 60
+            startTime.setHours(startHour, startMinute, 0, 0)
 
             // Clone it to create an 'endTime' Date object 
             const endTime = new Date(startTime)
 
-            // Add the duration to endTime
-            endTime.setHours(endTime.getHours() + bookDuration.value)
+            endTime.setMinutes(endTime.getMinutes() + bookDuration.value * 60)
 
             // Return 
             return {
@@ -264,7 +277,7 @@
                    <div class="row align-items-center mb-3">
                         <label for="starttime" class="col-sm-4 col-form-label">Start Time (24hr): </label>
                         <div class="col-sm-8">
-                            <input v-model="bookStartTime" @input="resetAvailableRooms" id="starttime" type="number" min="0" max="23" class="form-control" placeholder="0-23" required/>
+                            <input v-model.number="bookStartTime" @input="resetAvailableRooms" id="starttime" type="number" :min="startTimeMinimum" :max="startTimeMaximum" step="0.5" class="form-control" placeholder="0-23.5" required/>
                         </div>
                    </div>
 
@@ -272,7 +285,7 @@
                    <div class="row align-items-center mb-3">
                         <label for="duration" class="col-sm-4 col-form-label">Duration (Hours): </label>
                         <div class="col-sm-8">
-                            <input v-model="bookDuration" @input="resetAvailableRooms" id="duration" type="number" min="1" max="24" class="form-control" placeholder="1-24" required/>
+                            <input v-model.number="bookDuration" @input="resetAvailableRooms" id="duration" type="number" min="0.5" :max="maximumDurationHours" step="0.5" class="form-control" placeholder="0.5-24" required/>
                         </div>
                    </div>
 

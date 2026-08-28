@@ -21,6 +21,12 @@ export async function getPendingBookings(): Promise<BookingRequest[]> {
     return response.data
 }
 
+// Get all school bookings intersecting a calendar date for staff.
+export async function getSchoolBookingsForDate(date: string): Promise<BookingRequest[]> {
+    const response = await api.get("/bookings/school", { params: { date } })
+    return response.data
+}
+
 // Submit a Booking
 export async function submitBooking(input:{room:Room, app:PossibleBooking}) {
     const response = await api.post("/bookings", input)

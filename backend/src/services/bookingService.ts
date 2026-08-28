@@ -6,6 +6,8 @@ import { RULES } from "../models/Rules"
 import { canApproveBooking, canCreateBooking } from "../rbac/can"
 import type { User } from "../models/User"
 import { getStudentStrikeStatus } from "./strikeService"
+import { validateBookingInterval } from "./bookingTimePolicy"
+import { bookingIntersectsCalendarDay, getLocalCalendarDayRange } from "./bookingDateRange"
 
 // Create a booking 
 export async function createBooking(input: {room:Room, app:PossibleBooking}, user:User) {
@@ -41,6 +43,29 @@ export async function createBooking(input: {room:Room, app:PossibleBooking}, use
     const room = roomSnap.data()
     if (room.schoolId !== user.schoolId) { throw new Error("Not authorised for this room.") }
 
+    if (!roomId || !userId || !startTime || !endTime || !type) {
+        throw new Error("Missing required fields.")
+    }
+    if (
+        typeof roomId !== "string" ||
+        typeof userId !== "string" ||
+        typeof startTime !== "string" ||
+        typeof endTime !== "string"
+    ) {
+        throw new Error("All fields must be of valid data type.")
+    }
+
+    const maxBookingHours = room.rules?.maxBookingHours ?? RULES.maxBookingHours
+    const openHour = room.rules?.openHour ?? RULES.openHour
+    const closeHour = room.rules?.closeHour ?? RULES.closeHour
+    const allowedDays = room.rules?.allowedDays ?? RULES.allowedDays
+    const { start, end } = validateBookingInterval(startTime, endTime, {
+        maxBookingHours,
+        openHour,
+        closeHour,
+        allowedDays
+    })
+
     // Is the booker a student? If so, go through validation.
     if (user.role === "student") {
         if (typeof user.schoolId !== "string" || !user.schoolId.trim()) {
@@ -57,65 +82,9 @@ export async function createBooking(input: {room:Room, app:PossibleBooking}, use
             throw new Error("Room is not bookable.")
         }
 
-        // Step 1: Ensure all fields exist 
-        if (!roomId || !userId || !startTime || !endTime || !type) {
-            // Bad request, respond 400
-            throw new Error("Missing required fields.")
-        }
-
-        // Step 2: Ensure all fields are strings 
-        if (
-            typeof roomId !== "string" ||
-            typeof userId !== "string" ||
-            typeof startTime !== "string" ||
-            typeof endTime !== "string"
-        ) {
-            // Bad request, respond 400
-            throw new Error("All fields must be of valid data type.")
-        }
-
-        // Step 3: Convert date strings to date objects 
-        const start = new Date(startTime)
-        const end = new Date(endTime)
-
-        // Step 4: Validate date objects
-        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-            throw new Error("Invalid date format.")
-        }
-
-        // Step 5: Ensure end is AFTER start 
-        if (end <= start) {
-            throw new Error("endTime must be after startTime..")
-        }
-
-        // Step 6: Ensure the duration of the booking is within max length boundaries 
-        const durationMs = end.getTime() - start.getTime()
-        const durationHours = durationMs / (1000*60*60)
-        const maxHours = room.rules.maxBookingHours ?? RULES.maxBookingHours // Set max hours a booking can be to room max if it exists, otherwise rules max
-        if (durationHours > maxHours) {
-            throw new Error("Booking exceeds maximum hours of selected room.")
-        }
-
-        // Step 7: Must be within school hours
-        const startHour = start.getHours()
-        const endHour = end.getHours()
-        const open = room.rules?.openHour ?? RULES.openHour
-        const close = room.rules?.closeHour ?? RULES.closeHour
-        if (startHour < open || endHour > close) {
-            throw new Error("Booking must be within valid opening hours.")
-        }
-
-        // Step 8: Must be in the future. 
         const now = new Date()
         if (start <= now) {
             throw new Error("Booking must be in the future.")
-        }
-
-        // Step 9: Must be on a valid day 
-        const dayOfWeek = start.getDay()
-        const allowedDays = room.rules?.allowedDays ?? RULES.allowedDays
-        if (!allowedDays.includes(dayOfWeek)) {
-            throw new Error("Bookings not available in that room on that day.")
         }
 
         // Step 10: Check for existing bookings / conflicts 
@@ -284,6 +253,20 @@ export async function approveBooking(bookingId: string, user:User) {
         throw new Error("Only pending / waitlisted bookings can be approved.")
     }
 
+    const roomSnap = await db.collection("rooms").doc(booking.roomId).get()
+    if (!roomSnap.exists) { throw new Error("Room not found.") }
+    const room = roomSnap.data()
+    const maxBookingHours = room.rules?.maxBookingHours ?? RULES.maxBookingHours
+    const openHour = room.rules?.openHour ?? RULES.openHour
+    const closeHour = room.rules?.closeHour ?? RULES.closeHour
+    const allowedDays = room.rules?.allowedDays ?? RULES.allowedDays
+    validateBookingInterval(booking.startTime, booking.endTime, {
+        maxBookingHours,
+        openHour,
+        closeHour,
+        allowedDays
+    })
+
     // Will approving this booking cause an overlap?
     const snapshot = await db.collection("bookings")
     .where("schoolId","==",user.schoolId)
@@ -364,6 +347,36 @@ export async function getPendingBookings(user:User) {
         id:doc.id,
         ...doc.data()
     } as BookingRequest)))
+}
+
+// Get all school bookings that intersect a local calendar day for staff.
+export async function getSchoolBookingsForDate(user: User, date: string) {
+    if (!canApproveBooking(user.role)) {
+        throw new Error("Unauthorised to view school bookings.")
+    }
+    if (typeof user.schoolId !== "string" || !user.schoolId.trim()) {
+        throw new Error("User is not assigned to a valid school.")
+    }
+
+    const calendarDay = getLocalCalendarDayRange(date)
+    const snapshot = await db.collection("bookings")
+        .where("schoolId", "==", user.schoolId)
+        .orderBy("startTime")
+        .get()
+
+    const bookings = snapshot.docs.filter((doc) => {
+        const booking = doc.data()
+        const bookingStart = new Date(booking.startTime)
+        const bookingEnd = new Date(booking.endTime)
+        return !Number.isNaN(bookingStart.getTime()) &&
+            !Number.isNaN(bookingEnd.getTime()) &&
+            bookingIntersectsCalendarDay(bookingStart, bookingEnd, calendarDay)
+    }).map((doc): BookingRequest => ({
+        id: doc.id,
+        ...doc.data()
+    } as BookingRequest))
+
+    return enrichBookings(bookings)
 }
 
 // Get bookings created by the authenticated user.

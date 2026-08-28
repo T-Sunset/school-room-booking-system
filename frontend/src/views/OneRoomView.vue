@@ -24,9 +24,6 @@
     const bookingFeedback = ref("")
     const bookingFeedbackType = ref<"success" | "danger">("success")
 
-    // Get number of hours between the opening and closing hour of this room
-    const hours : number[] = []
-
     // On page load / Start function
     onMounted(async () => {
         // Try to fetch the room according to RoomID if possible.
@@ -47,13 +44,6 @@
         }
         finally {
             loading.value = false
-
-            // Get number of hours between the opening and closing hour of this room
-            if (room.value) {
-                for (let h = room.value.rules.openHour; h < room.value.rules.closeHour; h++) {
-                    hours.push(h)
-                }
-            }
         }
     })
 
@@ -78,6 +68,14 @@
         {label:"Year 12", value:12}
     ]
 
+    const timeSlots = computed(() => {
+        const slots = new Map<number, RoomAvailabilityCell>()
+        availability.value.forEach((cell) => {
+            if (!slots.has(cell.hour)) slots.set(cell.hour, cell)
+        })
+        return [...slots.values()].sort((first, second) => first.startTime.localeCompare(second.startTime))
+    })
+
     const availabilityBySlot = computed(() => new Map(
         availability.value.map((cell) => [`${cell.day}-${cell.hour}`, cell])
     ))
@@ -88,6 +86,11 @@
 
     function getCellStatus(day: number, hour: number) {
         return getCell(day, hour)?.status || "unavailable"
+    }
+
+    function formatCellTime(startTime: string) {
+        const date = new Date(startTime)
+        return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
     }
 
     function canBookCell(day: number, hour: number) {
@@ -211,11 +214,11 @@
             </tr>
         </thead>
         <tbody>
-            <tr v-for="hour in hours" :key="hour">
-                <td>{{ hour }}:00</td>
-                <td v-for="day in days" :key="day.value">
-                    <div>{{ getCellStatus(day.value, hour) }}</div>
-                    <button v-if="canBookCell(day.value, hour)" type="button" class="btn btn-sm btn-primary mt-1" @click="openCellBooking(day.value, hour)">
+            <tr v-for="slot in timeSlots" :key="slot.startTime">
+                <td>{{ formatCellTime(slot.startTime) }}</td>
+                <td v-for="day in days" :key="`${day.value}-${getCell(day.value, slot.hour)?.startTime || slot.startTime}`">
+                    <div>{{ getCellStatus(day.value, slot.hour) }}</div>
+                    <button v-if="canBookCell(day.value, slot.hour)" type="button" class="btn btn-sm btn-primary mt-1" @click="openCellBooking(day.value, slot.hour)">
                         Book
                     </button>
                 </td>
