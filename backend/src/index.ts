@@ -9,6 +9,7 @@ import { createRoom, editRoom, getRooms, getRoomAvailability, getRoomSingle, get
 import { changeUserRole, createUser, getSchoolStudents, getStudentRoster, getSpecificUser, getUsers } from "./services/userService"
 import { getStudentStrikeStatus, issueBandStrike, issueStrike } from "./services/strikeService"
 import { recordAttendance } from "./services/attendanceService"
+import { getAuditLogs } from "./services/auditService"
 
 // Set up the Express app and middleware
 const app = express()
@@ -290,7 +291,8 @@ app.delete("/rooms/:id", authMiddleware, async (req:AuthenticatedRequest, res:Re
         }
         const result = await removeRoom(roomId, req.user)
         return res.json({
-            success:true
+            success:true,
+            status:result.status
         })
     } catch (err) {
         console.error(err)
@@ -421,7 +423,7 @@ app.get("/users/:id", authMiddleware, async(req:AuthenticatedRequest, res:Respon
 })
 
 // Edit user role / permissions
-app.patch("users/:id", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+app.patch("/users/:id", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
     // Failsafe 
     try {
         const userId = req.params.id 
@@ -430,9 +432,11 @@ app.patch("users/:id", authMiddleware, async(req:AuthenticatedRequest, res:Respo
                 error:"Invalid user ID."
             })
         }
-        const result = await changeUserRole(userId, req.body, req.user)
+        const result = await changeUserRole(userId, req.body?.role, req.user)
         return res.json({
-            success:true
+            success:true,
+            status:result.status,
+            role:result.role
         })
     } catch (err) {
         console.error(err)
@@ -527,6 +531,25 @@ app.patch("/rollcall/:bookingId/:studentId/attendance", authMiddleware, async(re
         const result = await recordAttendance(bookingId, studentId, req.body?.status, req.user)
         return res.json(result)
     } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
+})
+
+// View the authenticated administrator's school audit log.
+app.get("/audit-logs", authMiddleware, async(req:AuthenticatedRequest, res:Response) => {
+    try {
+        const result = await getAuditLogs(req.user, {
+            from: typeof req.query.from === "string" ? req.query.from : undefined,
+            to: typeof req.query.to === "string" ? req.query.to : undefined,
+            action: typeof req.query.action === "string" ? req.query.action : undefined,
+            actor: typeof req.query.actor === "string" ? req.query.actor : undefined,
+            entityType: typeof req.query.entityType === "string" ? req.query.entityType : undefined,
+            pageSize: typeof req.query.pageSize === "string" ? req.query.pageSize : undefined,
+            cursor: typeof req.query.cursor === "string" ? req.query.cursor : undefined
+        })
+        return res.json(result)
+    } catch (err) {
+        console.error(err)
         return res.status(400).json({ error:err.message })
     }
 })

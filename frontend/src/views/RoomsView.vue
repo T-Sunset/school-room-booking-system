@@ -2,7 +2,7 @@
     // RoomsView.vue
     import { ref, onMounted } from 'vue';
     import type { Room } from '../types/Room';
-    import { getRooms } from '../services/roomService';
+    import { deactivateRoom, getRooms } from '../services/roomService';
     import { useAuthStore } from '../stores/authStore';
     import RoomModal from '../components/RoomModal.vue';
     import { useRouter } from 'vue-router';
@@ -14,6 +14,8 @@
     const rooms = ref<Room[]>([])
     const loading = ref(true)
     const error = ref("")
+    const success = ref("")
+    const actionRoomId = ref("")
 
     // Get Router
     const router = useRouter()
@@ -32,11 +34,12 @@
         // Get our rooms from back-end
         try {
             loading.value = true
+            error.value = ""
             rooms.value = await getRooms()
         } catch (err:any) {
             // Report on any errors if they occur
             console.log(err.response?.data)
-            error.value = err.response?.data || "Failed to load rooms."
+            error.value = err.response?.data?.error || err.message || "Failed to load rooms."
         } finally {
             loading.value = false
         }
@@ -59,8 +62,25 @@
     }
 
     function getRoomStatus(room: Room) {
-        if (!room.isBookable) return "Unavailable"
+        if (!room.isBookable) return "Inactive"
         return room.isInUse ? "In use" : "Available"
+    }
+
+    async function removeRoom(room: Room) {
+        if (!window.confirm(`Deactivate ${room.name}? Historical bookings will be preserved.`)) return
+
+        actionRoomId.value = room.id
+        error.value = ""
+        success.value = ""
+        try {
+            await deactivateRoom(room.id)
+            await loadRooms()
+            success.value = `${room.name} was deactivated.`
+        } catch (err:any) {
+            error.value = err.response?.data?.error || err.message || "Unable to deactivate room."
+        } finally {
+            actionRoomId.value = ""
+        }
     }
 
     function formatNextAvailable(room: Room) {
@@ -82,6 +102,9 @@
      <div v-if="error" class="alert alert-danger">
         {{ error }}
      </div>
+    <div v-if="success" class="alert alert-success">
+        {{ success }}
+    </div>
 
     <!-- Content Card -->
      <div class="card p-3" v-if="!loading && rooms.length">
@@ -107,12 +130,13 @@
                         <button class="btn btn-sm btn-primary me-2" @click="viewRoom(room.id)">
                             View
                         </button>
-                        <button class="btn btn-sm btn-warning me-2" @click="openRoomModal(room)">
+                        <button v-if="authStore.role === 'admin'" class="btn btn-sm btn-warning me-2" :disabled="actionRoomId !== ''" @click="openRoomModal(room)">
                             Edit
                         </button>
-                        <button class="btn btn-sm btn-danger">
-                            Remove
+                        <button v-if="authStore.role === 'admin' && room.isBookable" class="btn btn-sm btn-danger" :disabled="actionRoomId !== ''" @click="removeRoom(room)">
+                            {{ actionRoomId === room.id ? 'Deactivating...' : 'Remove' }}
                         </button>
+                        <span v-else-if="!room.isBookable" class="text-muted">Inactive</span>
                     </td>
                 </tr>
              </tbody>

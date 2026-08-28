@@ -6,6 +6,7 @@ import { RULES } from "../models/Rules"
 import type { User } from "../models/User"
 import { BookingRequest, isOverlapping, PossibleBooking } from "../models/BookingRequest"
 import { BOOKING_BLOCK_MINUTES, parseBookingInterval, validateBookingInterval } from "./bookingTimePolicy"
+import { logAuditEvent } from "./auditService"
 
 // Create a Room
 export async function createRoom(input:Room, user:User) {
@@ -49,6 +50,18 @@ export async function createRoom(input:Room, user:User) {
         createdBy,
         createdAt
     })
+
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "room.created",
+            entityType: "room",
+            entityId: docRef.id,
+            metadata: { roomName: name }
+        })
+    } catch (error) {
+        console.error("Failed to write room creation audit event:", error)
+    }
 
     // Return OK!
     return {
@@ -100,19 +113,82 @@ export async function editRoom(roomId:string, input: Room, user:User) {
         if (sameNameRooms.docs.some(doc=>doc.id !== roomId)) { throw new Error("A room with that name already exists.") }
     }
 
+    const nextName = input.name ?? room.name
+    const nextIsBookable = input.isBookable ?? room.isBookable
+
     // Apply changes 
     const rules = {
         ...room.rules,
         ...(input.rules ?? {})
     }
 
+    const isReactivating = room.isBookable === false && nextIsBookable === true
+    const changedFields: Record<string, string | number | boolean | null> = {}
+    if (nextName !== room.name) {
+        changedFields.previousName = room.name
+        changedFields.newName = nextName
+    }
+    if (nextIsBookable !== room.isBookable) {
+        changedFields.previousIsBookable = room.isBookable
+        changedFields.newIsBookable = nextIsBookable
+    }
+    if (JSON.stringify(rules) !== JSON.stringify(room.rules)) {
+        changedFields.rulesChanged = true
+    }
+
+    const isDeactivating = room.isBookable !== false && nextIsBookable === false
+    if (isReactivating || isDeactivating) {
+        const transitionAt = new Date().toISOString()
+        const transitionAction = isReactivating ? "room.reactivated" : "room.deactivated"
+        await db.runTransaction(async (transaction) => {
+            const latestSnapshot = await transaction.get(ref)
+            if (!latestSnapshot.exists) throw new Error("Room not found.")
+            const latestRoom = latestSnapshot.data()
+            if (latestRoom.schoolId !== user.schoolId) throw new Error("Not authorised for this school.")
+
+            transaction.update(ref, {
+                name: nextName,
+                isBookable: nextIsBookable,
+                nameNormalised,
+                rules,
+                deactivatedAt: isReactivating ? null : transitionAt,
+                deactivatedBy: isReactivating ? null : user.id
+            })
+            await logAuditEvent({
+                actor: user,
+                action: transitionAction,
+                entityType: "room",
+                entityId: roomId,
+                metadata: {
+                    roomName: nextName,
+                    ...(isDeactivating ? { deactivatedBy: user.id } : {})
+                }
+            }, transaction)
+        })
+        return
+    }
+
     // Update 
     await ref.update({
-        name:input.name ?? room.name,
-        isBookable:input.isBookable ?? room.isBookable,
+        name:nextName,
+        isBookable:nextIsBookable,
         nameNormalised,
         rules
     })
+
+    if (Object.keys(changedFields).length > 0) {
+        try {
+            await logAuditEvent({
+                actor: user,
+                action: "room.updated",
+                entityType: "room",
+                entityId: roomId,
+                metadata: { roomName: nextName, ...changedFields }
+            })
+        } catch (error) {
+            console.error("Failed to write room update audit event:", error)
+        }
+    }
 }
 
 // Remove a Room
@@ -122,21 +198,32 @@ export async function removeRoom(roomId:string, user:User) {
 
     // Fetch the room 
     const ref = db.collection("rooms").doc(roomId)
-    const snap = await ref.get()
+    return db.runTransaction(async (transaction) => {
+        const snap = await transaction.get(ref)
 
-    // Does the room exist?
-    if (!snap.exists) {
-        throw new Error("Room not found.")
-    }
+        if (!snap.exists) {
+            throw new Error("Room not found.")
+        }
 
-    // Get snapshot to data 
-    const room = snap.data()
-    
-    // Check SchoolID and validate 
-    if (room.schoolId !== user.schoolId) { throw new Error("Not authorised for this school.") }
+        const room = snap.data()
+        if (room.schoolId !== user.schoolId) { throw new Error("Not authorised for this school.") }
+        if (room.isBookable === false) return { status: "already_inactive" as const }
 
-    // Otherwise, remove the room.
-    await ref.delete()
+        const deactivatedAt = new Date().toISOString()
+        transaction.update(ref, {
+            isBookable: false,
+            deactivatedAt,
+            deactivatedBy: user.id
+        })
+        await logAuditEvent({
+            actor: user,
+            action: "room.deactivated",
+            entityType: "room",
+            entityId: roomId,
+            metadata: { roomName: room.name }
+        }, transaction)
+        return { status: "deactivated" as const }
+    })
 } 
 
 // Get Rooms 

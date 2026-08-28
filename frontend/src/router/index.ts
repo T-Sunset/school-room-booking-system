@@ -21,7 +21,7 @@ const routes = [
     { path: '/login', component:LoginView },
     { path: '/signup', component:SignUpView},
     { path: '/rooms', component:RoomsView , meta: { requiresAuth:true } },
-    { path: '/admin', component:AdminView , meta: { requiresAuth:true } },
+    { path: '/admin', component:AdminView , meta: { requiresAuth:true, requiresAdmin:true } },
     {path: '/rooms/:id', component:OneRoomView, meta: {requiresAuth:true } },
     { path: '/bookings', component:BookingsView, meta: {requiresAuth:true} },
     { path: '/bands', component:BandsView, meta: {requiresAuth:true} },
@@ -47,6 +47,8 @@ router.beforeEach(async (to) => {
     if (to.meta.requiresAuth && !user) {
         return ("/login")
     } else if (to.meta.requiresStudentManagement && authStore.role !== "teacher" && authStore.role !== "admin") {
+        return ("/")
+    } else if (to.meta.requiresAdmin && authStore.role !== "admin") {
         return ("/")
     } else {
         return

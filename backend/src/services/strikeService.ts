@@ -4,6 +4,7 @@ import { Strike } from "../models/Strike"
 import { Band } from "../models/Band"
 import { canManageStudents } from "../rbac/can"
 import type { User } from "../models/User"
+import { logAuditEvent } from "./auditService"
 
 const STRIKE_DURATION_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -99,7 +100,23 @@ export async function issueStrike(targetUserId:string, reason:string, issuer:Use
     if (target.role !== "student") { throw new Error("Strikes can only be issued to students.") }
     if (target.schoolId !== issuer.schoolId) { throw new Error("Unauthorised to issue strikes for this school.") }
 
-    return createStrikeDoc(targetUserId, issuer.schoolId, issuer.id, reason)
+    const strike = await createStrikeDoc(targetUserId, issuer.schoolId, issuer.id, reason)
+    try {
+        await logAuditEvent({
+            actor: issuer,
+            action: "strike.issued",
+            entityType: "strike",
+            entityId: strike.id,
+            metadata: {
+                targetStudentId: strike.userId,
+                issuedAt: strike.issuedAt,
+                reason: strike.reason
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write strike issuance audit event:", error)
+    }
+    return strike
 }
 
 // Issue an individual strike to every current member of an approved band
@@ -139,5 +156,20 @@ export async function issueBandStrike(bandId:string, reason:string, issuer:User)
     })
 
     await batch.commit()
+    try {
+        await logAuditEvent({
+            actor: issuer,
+            action: "band.strike_issued",
+            entityType: "band",
+            entityId: bandId,
+            metadata: {
+                bandName: band.name,
+                affectedMemberCount: strikes.length,
+                reason
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write band strike audit event:", error)
+    }
     return strikes
 }

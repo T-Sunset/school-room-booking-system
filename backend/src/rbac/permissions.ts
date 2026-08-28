@@ -6,20 +6,23 @@ export const permissions = {
         approveBooking: false,
         overrideRules: false,
         manageStudents: false,
-        recordAttendance: false
+        recordAttendance: false,
+        viewAuditLogs: false
     },
     teacher: {
         createBooking: true,
         approveBooking: true,
         overrideRules: false,
         manageStudents: true,
-        recordAttendance: true
+        recordAttendance: true,
+        viewAuditLogs: false
     },
     admin: {
         createBooking: true,
         approveBooking: true,
         overrideRules: true,
         manageStudents: true,
-        recordAttendance: true
+        recordAttendance: true,
+        viewAuditLogs: true
     }
 } as const
