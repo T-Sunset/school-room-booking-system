@@ -105,7 +105,7 @@ Attendance updates are restricted to authorised staff, approved bookings, associ
 
 The repository currently contains no application screenshots. This section is ready to be populated with real screenshots of the current interface.
 
-Suggested screenshots:
+Screenshots to be added:
 
 - Dashboard
 - Room timetable
