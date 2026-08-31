@@ -267,8 +267,9 @@ export async function getRooms(user:User) {
     })
 }
 
-export function getNextAvailable(room: Room, bookings: BookingRequest[], now: Date, durationMinutes = 60): string | null {
+export function getNextAvailable(room: Room, bookings: BookingRequest[], now: Date, durationMinutes?: number): string | null {
     if (!room.isBookable) return null
+    const requestedDuration = durationMinutes ?? room.rules.maxBookingHours * 60
 
     for (let dayOffset = 0; dayOffset <= 14; dayOffset++) {
         const candidateDay = new Date(now)
@@ -276,27 +277,35 @@ export function getNextAvailable(room: Room, bookings: BookingRequest[], now: Da
         candidateDay.setHours(room.rules.openHour, 0, 0, 0)
 
         if (!room.rules.allowedDays.includes(candidateDay.getDay())) continue
-        if (dayOffset === 0 && candidateDay < now) {
+        const candidateDate = candidateDay.toDateString()
+        if (dayOffset === 0 && (
+            candidateDay < now ||
+            (candidateDay.getTime() === now.getTime() && now.getHours() !== room.rules.openHour)
+        )) {
             const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60
-            const nextBoundary = Math.ceil(minutesSinceMidnight / BOOKING_BLOCK_MINUTES) * BOOKING_BLOCK_MINUTES
+            const nextBoundary = Math.floor(minutesSinceMidnight / BOOKING_BLOCK_MINUTES + 1) * BOOKING_BLOCK_MINUTES
             candidateDay.setHours(Math.floor(nextBoundary / 60), nextBoundary % 60, 0, 0)
         }
 
-        const candidateEnd = new Date(candidateDay)
-        candidateEnd.setMinutes(candidateEnd.getMinutes() + durationMinutes)
-        try {
-            validateBookingInterval(candidateDay.toISOString(), candidateEnd.toISOString(), room.rules)
-        } catch {
-            continue
-        }
+        while (candidateDay.toDateString() === candidateDate) {
+            const candidateEnd = new Date(candidateDay)
+            candidateEnd.setMinutes(candidateEnd.getMinutes() + requestedDuration)
+            try {
+                validateBookingInterval(candidateDay.toISOString(), candidateEnd.toISOString(), room.rules)
+            } catch {
+                break
+            }
 
-        const overlaps = bookings.some(booking => isOverlapping(
-            candidateDay,
-            candidateEnd,
-            new Date(booking.startTime),
-            new Date(booking.endTime)
-        ))
-        if (!overlaps) return candidateDay.toISOString()
+            const overlaps = bookings.some(booking => isOverlapping(
+                candidateDay,
+                candidateEnd,
+                new Date(booking.startTime),
+                new Date(booking.endTime)
+            ))
+            if (!overlaps) return candidateDay.toISOString()
+
+            candidateDay.setMinutes(candidateDay.getMinutes() + BOOKING_BLOCK_MINUTES)
+        }
     }
 
     return null
