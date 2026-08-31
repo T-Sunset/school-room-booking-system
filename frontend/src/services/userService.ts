@@ -6,6 +6,8 @@ import { useAuthStore } from "../stores/authStore";
 import type { User as FirebaseUser } from "firebase/auth";
 import type { StudentRosterEntry } from "../types/Student";
 import type { StrikeStatus } from "../types/Strike";
+import type { AdminUser, ChangeUserRoleResponse } from "../types/AdminUser";
+import type { UserRole } from "../types/UserRole";
 
 // Actual Login function; Error handling in callers
 export async function login(rememberMe:boolean, email:string, password:string) {
@@ -115,4 +117,14 @@ export async function signUp(email:string, password:string, yearLevel:number) {
     } catch (err:any) {
         console.log("Sign-up failed: ", err.response?.data || err.message)
     }
+}
+
+export async function getUsers(): Promise<AdminUser[]> {
+    const response = await api.get<AdminUser[]>('/users')
+    return response.data
+}
+
+export async function changeUserRole(userId: string, role: Exclude<UserRole, 'na'>): Promise<ChangeUserRoleResponse> {
+    const response = await api.patch<ChangeUserRoleResponse>(`/users/${userId}`, { role })
+    return response.data
 }

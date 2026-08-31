@@ -3,6 +3,9 @@
 	import { getAuditLogs } from '../services/auditService'
 	import type { AuditAction, AuditEntityType, AuditLogEvent } from '../types/AuditLog'
 	import { useAuthStore } from '../stores/authStore'
+	import { changeUserRole, getUsers } from '../services/userService'
+	import type { AdminUser } from '../types/AdminUser'
+	import type { UserRole } from '../types/UserRole'
 
 	const authStore = useAuthStore()
 	const events = ref<AuditLogEvent[]>([])
@@ -16,6 +19,15 @@
 	const currentCursor = ref<string | undefined>(undefined)
 	const nextCursor = ref<string | null>(null)
 	const previousCursors = ref<Array<string | undefined>>([])
+	const users = ref<AdminUser[]>([])
+	const usersLoading = ref(false)
+	const usersError = ref('')
+	const roleChangeTarget = ref<AdminUser | null>(null)
+	const roleSelections = ref<Record<string, AdminUser['role']>>({})
+	const roleChangeUserId = ref('')
+	const roleChangeError = ref('')
+	const roleChangeSuccess = ref('')
+	const roleOptions: Array<Exclude<UserRole, 'na'>> = ['student', 'teacher', 'admin']
 
 	const actions: AuditAction[] = [
 		'user.profile_created', 'user.role_changed',
@@ -26,7 +38,76 @@
 	]
 	const entityTypes: AuditEntityType[] = ['user', 'room', 'booking', 'band', 'strike', 'attendance']
 
-	onMounted(() => loadPage())
+	onMounted(() => {
+		loadUsers()
+		loadPage()
+	})
+
+	async function loadUsers() {
+		if (authStore.role !== 'admin') return
+		usersLoading.value = true
+		usersError.value = ''
+		try {
+			const result = await getUsers()
+			users.value = result
+			roleSelections.value = Object.fromEntries(result.map((user) => [user.id, user.role]))
+		} catch (err: any) {
+			usersError.value = err.response?.data?.error || err.message || 'Unable to load users.'
+		} finally {
+			usersLoading.value = false
+		}
+	}
+
+	function roleLabel(role: AdminUser['role']) {
+		return role.charAt(0).toUpperCase() + role.slice(1)
+	}
+
+	function isCurrentUser(user: AdminUser) {
+		return user.id === authStore.uid
+	}
+
+	function selectedRole(user: AdminUser) {
+		return roleSelections.value[user.id] || user.role
+	}
+
+	function canSubmitRoleChange(user: AdminUser) {
+		return !isCurrentUser(user) && selectedRole(user) !== user.role && roleChangeUserId.value !== user.id
+	}
+
+	function openRoleChange(user: AdminUser) {
+		if (!canSubmitRoleChange(user)) return
+		roleChangeError.value = ''
+		roleChangeSuccess.value = ''
+		roleChangeTarget.value = user
+	}
+
+	function closeRoleChange() {
+		if (roleChangeUserId.value) return
+		roleChangeTarget.value = null
+		roleChangeError.value = ''
+	}
+
+	async function confirmRoleChange() {
+		const target = roleChangeTarget.value
+		if (!target || roleChangeUserId.value) return
+
+		const newRole = selectedRole(target)
+		if (newRole === target.role) return
+
+		roleChangeUserId.value = target.id
+		roleChangeError.value = ''
+		roleChangeSuccess.value = ''
+		try {
+			await changeUserRole(target.id, newRole)
+			await loadUsers()
+			roleChangeTarget.value = null
+			roleChangeSuccess.value = `${target.email} is now ${roleLabel(newRole)}.`
+		} catch (err: any) {
+			roleChangeError.value = err.response?.data?.error || err.message || 'Unable to change this user role.'
+		} finally {
+			roleChangeUserId.value = ''
+		}
+	}
 
 	async function loadPage(cursor?: string) {
 		if (authStore.role !== 'admin') return
@@ -83,8 +164,76 @@
 	</div>
 
 	<template v-else>
+		<section class="mb-4" aria-labelledby="user-roles-title">
+			<div class="section-header">
+				<h2 id="user-roles-title" class="h4 mb-0">User Roles</h2>
+				<button class="btn btn-outline-primary" :disabled="usersLoading" @click="loadUsers">Refresh users</button>
+			</div>
+			<div v-if="roleChangeSuccess" class="alert alert-success" role="status">{{ roleChangeSuccess }}</div>
+			<div v-if="usersError" class="alert alert-danger" role="alert">{{ usersError }}</div>
+			<div v-if="usersLoading" class="loading-state" role="status">Loading users...</div>
+			<div v-else-if="!usersError && users.length === 0" class="empty-state">No users found.</div>
+			<div v-else-if="!usersError" class="card data-card table-responsive">
+				<table class="table table-striped table-sm data-table align-middle mb-0">
+					<thead>
+						<tr>
+							<th>User</th>
+							<th>Current Role</th>
+							<th>New Role</th>
+							<th>Action</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="user in users" :key="user.id">
+							<td>
+								<strong>{{ user.email }}</strong>
+								<span v-if="isCurrentUser(user)" class="d-block text-muted">Current user</span>
+							</td>
+							<td><span class="status-badge status-neutral">{{ roleLabel(user.role) }}</span></td>
+							<td>
+								<label class="visually-hidden" :for="`role-${user.id}`">New role for {{ user.email }}</label>
+								<select :id="`role-${user.id}`" class="form-select" :value="selectedRole(user)" :disabled="isCurrentUser(user) || roleChangeUserId === user.id" @change="roleSelections[user.id] = ($event.target as HTMLSelectElement).value as AdminUser['role']">
+									<option v-for="role in roleOptions" :key="role" :value="role">{{ roleLabel(role) }}</option>
+								</select>
+							</td>
+							<td>
+								<span v-if="isCurrentUser(user)" class="text-muted">Current user</span>
+								<button v-else class="btn btn-sm btn-primary" :disabled="!canSubmitRoleChange(user)" @click="openRoleChange(user)">
+									{{ roleChangeUserId === user.id ? 'Changing...' : 'Change' }}
+								</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<div v-if="roleChangeTarget" class="modal-backdrop-custom" @click.self="closeRoleChange">
+			<div class="modal-dialog-custom role-change-dialog" role="dialog" aria-modal="true" aria-labelledby="role-change-title">
+				<div class="card p-4 modal-card">
+					<h2 id="role-change-title" class="h4">Change user role?</h2>
+					<dl class="mb-4">
+						<dt>User</dt>
+						<dd class="text-wrap-anywhere">{{ roleChangeTarget.email }}</dd>
+						<dt>Current role</dt>
+						<dd>{{ roleLabel(roleChangeTarget.role) }}</dd>
+						<dt>New role</dt>
+						<dd>{{ roleLabel(selectedRole(roleChangeTarget)) }}</dd>
+					</dl>
+					<p class="text-muted">This changes the user's access to the system.</p>
+					<div v-if="roleChangeError" class="alert alert-danger" role="alert">{{ roleChangeError }}</div>
+					<div class="d-flex justify-content-end gap-2">
+						<button class="btn btn-secondary" :disabled="roleChangeUserId !== ''" @click="closeRoleChange">Keep Current Role</button>
+						<button class="btn btn-primary" :disabled="roleChangeUserId !== ''" @click="confirmRoleChange">
+							{{ roleChangeUserId ? 'Changing...' : 'Change Role' }}
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<div class="view-header">
-			<h1 class="mb-0">Audit Log</h1>
+			<h2 class="h4 mb-0">Audit Log</h2>
 			<button class="btn btn-primary" :disabled="loading" @click="applyFilters">Refresh</button>
 		</div>
 
