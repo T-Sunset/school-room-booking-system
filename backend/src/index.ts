@@ -10,10 +10,11 @@ import { changeUserRole, createUser, getSchoolStudents, getStudentRoster, getSpe
 import { getStudentStrikeStatus, issueBandStrike, issueStrike } from "./services/strikeService"
 import { recordAttendance } from "./services/attendanceService"
 import { getAuditLogs } from "./services/auditService"
+import { corsAllowedOrigins, port } from "./config/environment"
 
 // Set up the Express app and middleware
 const app = express()
-app.use(cors())
+app.use(cors({ origin: corsAllowedOrigins }))
 app.use(express.json())
 
 // Test route 
@@ -555,7 +556,7 @@ app.get("/audit-logs", authMiddleware, async(req:AuthenticatedRequest, res:Respo
 })
 
 // Set our port 
-const PORT = process.env.PORT || 3000
+const PORT = port
 
 // Set listen to port 
 app.listen(PORT, () => {

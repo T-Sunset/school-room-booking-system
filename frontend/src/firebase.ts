@@ -1,15 +1,15 @@
 // Import the functions you need from the SDKs you need
 import {initializeApp} from "firebase/app"
 import {getAuth} from "firebase/auth"
+import {frontendEnvironment} from "./config/environment"
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDAqZM9mXYJmHm6QT9nafMh8TiQ5pMPLkE",
-  authDomain: "roombooking-5d20d.firebaseapp.com",
-  projectId: "roombooking-5d20d",
-  storageBucket: "roombooking-5d20d.firebasestorage.app",
-  messagingSenderId: "329032380974",
-  appId: "1:329032380974:web:862b27df89fe7f5f1325bf"
+  apiKey: frontendEnvironment.VITE_FIREBASE_API_KEY,
+  authDomain: frontendEnvironment.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: frontendEnvironment.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: frontendEnvironment.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: frontendEnvironment.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: frontendEnvironment.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase

@@ -138,6 +138,12 @@ The frontend uses Vue views and components with Vue Router for navigation, Pinia
 
 The backend uses Express route handlers, authentication middleware, RBAC helpers, and service modules for domain operations. The active API handlers are registered primarily in `backend/src/index.ts`; the repository should not be described as a fully separated controller/router architecture.
 
+## Environment Configuration
+
+Frontend Firebase web configuration and the backend API URL are supplied through Vite variables. Copy `frontend/.env.example` to `frontend/.env.local` and provide the developer Firebase web configuration and `VITE_API_BASE_URL=http://localhost:3000`. Production uses the school's Firebase web configuration and deployed backend URL in the school's deployment environment.
+
+Backend local configuration is supplied through `backend/.env`, based on `backend/.env.example`. `CORS_ALLOWED_ORIGINS` accepts a comma-separated allowlist. The ignored `serviceAccountKey.json` is used locally when present, while Google-managed production runtimes use Application Default Credentials and do not require that file. Set `TZ=Australia/Melbourne` for the school's IANA timezone. Tests explicitly use UTC through the backend `npm test` script.
+
 Firebase Authentication handles user identity. The backend verifies Firebase ID tokens, loads the corresponding user profile, applies role and school checks, validates business rules, and persists data through the Firebase Admin SDK and Firestore.
 
 ## Technology Stack
@@ -227,7 +233,7 @@ npm install
 
 ### Backend
 
-The backend currently imports a local `serviceAccountKey.json` from `backend/src/config/firebase.ts`. Supply that credential locally and do not commit it. The filename is excluded by `.gitignore`.
+Create `backend/.env` from `backend/.env.example`. The backend uses `http://localhost:3000` and allows the local frontend origin by default. Supply the ignored `serviceAccountKey.json` locally when using a developer Firebase project, or configure local Application Default Credentials. Do not commit credentials.
 
 Start the backend development server:
 
@@ -236,11 +242,9 @@ cd backend
 npm run dev
 ```
 
-The frontend API client currently targets the local backend at `http://localhost:3000`.
-
 ### Frontend
 
-The Firebase web configuration is currently present directly in `frontend/src/firebase.ts`; it is not loaded from `.env` in the current source. Do not copy live project identifiers or credentials into public documentation.
+Create `frontend/.env.local` by copying `frontend/.env.example`. Populate all six `VITE_FIREBASE_*` variables with the web configuration for your own development Firebase project and set `VITE_API_BASE_URL=http://localhost:3000`. The application reports the exact missing variable names if required configuration is absent. Do not copy live project identifiers or credentials into public documentation.
 
 Start the frontend development server:
 
