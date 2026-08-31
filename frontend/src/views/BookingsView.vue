@@ -4,7 +4,7 @@
     import {computed, ref, onMounted} from 'vue'
     import type { BookingRequest, PossibleBooking } from '../types/Booking'
     import type { Room } from '../types/Room'
-    import { approveBooking, denyBooking, getBookings, getPendingBookings } from '../services/bookingService'
+    import { approveBooking, cancelBooking, denyBooking, getBookings, getPendingBookings } from '../services/bookingService'
     import { getRooms, getRoomsForBooking } from '../services/roomService'
     import { getActiveBands, getBandsForUser, getSameSchoolUsers } from '../services/bandService'
     import { useAuthStore } from '../stores/authStore'
@@ -44,6 +44,9 @@
     const bookingActionId = ref("")
     const showBookingHistory = ref(false)
     const bookingSort = ref<"soonest" | "latest">("soonest")
+    const bookingSuccess = ref("")
+    const cancellationBooking = ref<BookingRequest | null>(null)
+    const cancellationLoading = ref(false)
     const isStaff = authStore.role === "teacher" || authStore.role === "admin"
     const displayedBookings = computed(() => {
         const now = new Date()
@@ -58,6 +61,16 @@
             return bookingSort.value === "soonest" ? firstTime - secondTime : secondTime - firstTime
         })
     })
+
+    function canCancelBooking(booking: BookingRequest): boolean {
+        if (booking.createdBy !== authStore.uid) return false
+        if (booking.status !== "pending" && booking.status !== "waitlisted" && booking.status !== "approved") return false
+        return new Date(booking.startTime) > new Date()
+    }
+
+    function bookingStatusLabel(status: BookingRequest["status"]): string {
+        return status === "cancelled" ? "Cancelled" : status
+    }
 
     // Get rooms list 
     const rooms = ref<Room[]>([])
@@ -113,6 +126,39 @@
             bookingsLoading.value = false
         }
     })
+
+    function openCancellation(booking: BookingRequest) {
+        if (!canCancelBooking(booking) || cancellationLoading.value) return
+        bookingSuccess.value = ""
+        bookingsError.value = ""
+        cancellationBooking.value = booking
+    }
+
+    function closeCancellation() {
+        if (cancellationLoading.value) return
+        cancellationBooking.value = null
+    }
+
+    async function confirmCancellation() {
+        const booking = cancellationBooking.value
+        if (!booking || cancellationLoading.value) return
+
+        cancellationLoading.value = true
+        bookingsError.value = ""
+        bookingSuccess.value = ""
+        try {
+            const response = await cancelBooking(booking.id)
+            bookings.value = await getBookings()
+            cancellationBooking.value = null
+            bookingSuccess.value = response.status === "cancelled" ? "Booking cancelled." : "Booking updated."
+        }
+        catch (err:any) {
+            bookingsError.value = err.response?.data?.error || err.message || "Unable to cancel this booking."
+        }
+        finally {
+            cancellationLoading.value = false
+        }
+    }
 
     function handleBookingTypeChange() {
         if (bookType.value === "solo") selectedBandId.value = ""
@@ -374,6 +420,7 @@
             <div class="section-header">
                 <h2 class="h4">My Bookings</h2>
             </div>
+            <div v-if="bookingSuccess" class="alert alert-success">{{ bookingSuccess }}</div>
             <div v-if="bookingsError" class="alert alert-danger">{{ bookingsError }}</div>
             <div v-else-if="bookingsLoading" class="loading-state" role="status">Loading your bookings...</div>
             <div v-else class="card p-3">
@@ -402,6 +449,7 @@
                                 <th>Start</th>
                                 <th>End</th>
                                 <th>Status</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -411,13 +459,44 @@
                                 <td>{{ booking.type === 'band' ? (bandNames[booking.bandId || ''] || "Band unavailable") : "-" }}</td>
                                 <td>{{ new Date(booking.startTime).toLocaleString() }}</td>
                                 <td>{{ new Date(booking.endTime).toLocaleString() }}</td>
-                                <td><span class="status-badge" :class="`status-${booking.status}`">{{ booking.status }}</span></td>
+                                <td><span class="status-badge" :class="`status-${booking.status}`">{{ bookingStatusLabel(booking.status) }}</span></td>
+                                <td>
+                                    <button v-if="canCancelBooking(booking)" class="btn btn-sm btn-outline-danger" @click="openCancellation(booking)">
+                                        Cancel
+                                    </button>
+                                    <span v-else class="text-muted">-</span>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </section>
+
+        <div v-if="cancellationBooking" class="modal-backdrop-custom" @click.self="closeCancellation">
+            <div class="modal-dialog-custom cancellation-dialog" role="dialog" aria-modal="true" aria-labelledby="cancellation-modal-title">
+                <div class="card p-4 modal-card">
+                    <h2 id="cancellation-modal-title" class="h4">Cancel booking?</h2>
+                    <dl class="mb-4">
+                        <dt>Room</dt>
+                        <dd>{{ cancellationBooking.roomName || roomNames[cancellationBooking.roomId] || "Room unavailable" }}</dd>
+                        <dt>Date</dt>
+                        <dd>{{ new Date(cancellationBooking.startTime).toLocaleDateString() }}</dd>
+                        <dt>Time</dt>
+                        <dd>{{ new Date(cancellationBooking.startTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }}–{{ new Date(cancellationBooking.endTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }}</dd>
+                    </dl>
+                    <p class="text-muted">This booking will be cancelled and cannot be restored.</p>
+                    <div v-if="bookingsError" class="alert alert-danger" role="alert">{{ bookingsError }}</div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button class="btn btn-secondary" :disabled="cancellationLoading" @click="closeCancellation">Keep Booking</button>
+                        <button class="btn btn-danger" :disabled="cancellationLoading" @click="confirmCancellation">
+                            <span v-if="cancellationLoading" class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                            {{ cancellationLoading ? "Cancelling..." : "Cancel Booking" }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <section v-if="isStaff" class="mt-4">
             <div class="section-header">

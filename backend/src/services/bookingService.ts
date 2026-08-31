@@ -1,6 +1,6 @@
 // BookingService.ts
 import { db } from "../config/firebase"
-import { BookingRequest, isOverlapping, BookingStatus, PossibleBooking, initialBooking } from "../models/BookingRequest"
+import { BookingRequest, canStudentCancelBooking, countWeeklySoloEntitlements, isOverlapping, BookingStatus, PossibleBooking, initialBooking } from "../models/BookingRequest"
 import type { Room } from "../models/Room"
 import { RULES } from "../models/Rules"
 import { canApproveBooking, canCreateBooking } from "../rbac/can"
@@ -135,6 +135,7 @@ export async function createBooking(input: {room:Room, app:PossibleBooking}, use
         type,
         bandId:bandId || null,
         status,
+        weeklyEntitlementConsumed: booking.weeklyEntitlementConsumed,
         reason,
         approvedBy,
         approvedAt,
@@ -210,14 +211,21 @@ async function determineBookingStatus(input:BookingRequest, user:User, room): Pr
         .where("createdBy", "==", user.id)
         .where("schoolId","==",user.schoolId)
         .where("type","==","solo")
-        .where("status","==","approved")
+        .where("status","in",["approved", "cancelled"])
+        .where("weeklyEntitlementConsumed","==",true)
         .where("startTime",">=",startOfWeek.toISOString())
+        .where("startTime","<",new Date(startOfWeek.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString())
         .get()
-    if (snapshot.size === 0) { 
-        // No other bookings made this week. 
+    const weeklyEntitlementCount = countWeeklySoloEntitlements(
+        snapshot.docs.map((doc) => doc.data() as BookingRequest),
+        startOfWeek
+    )
+    if (weeklyEntitlementCount === 0) {
+        // No other bookings made this week.
         setDecision(input, "First solo booking of the week is automatically approved.")
-        return "approved" 
-    } else if (snapshot.size === 1) { 
+        input.weeklyEntitlementConsumed = true
+        return "approved"
+    } else if (weeklyEntitlementCount === 1) {
         setDecision(input, "Solo bookings after the first are placed automatically to the Waitlist.")
         return "waitlisted" 
     }
@@ -313,7 +321,8 @@ export async function approveBooking(bookingId: string, user:User) {
     await ref.update({
         status:"approved",
         approvedBy:user.id,
-        approvedAt:new Date().toISOString()
+        approvedAt:new Date().toISOString(),
+        weeklyEntitlementConsumed: booking.type === "solo"
     })
     try {
         await logAuditEvent({
@@ -371,6 +380,77 @@ export async function denyBooking(bookingId:string, user:User) {
     } catch (error) {
         console.error("Failed to write booking denial audit event:", error)
     }
+}
+
+export async function cancelBooking(bookingId: string, user: User) {
+    if (user.role !== "student") {
+        throw new Error("Only students can cancel bookings.")
+    }
+    if (!user.id || typeof user.schoolId !== "string" || !user.schoolId.trim()) {
+        throw new Error("User is not assigned to a valid school.")
+    }
+    if (!bookingId || !bookingId.trim()) {
+        throw new Error("Invalid booking ID.")
+    }
+
+    const ref = db.collection("bookings").doc(bookingId)
+    const cancellation = await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(ref)
+        if (!snapshot.exists) {
+            throw new Error("Booking not found.")
+        }
+
+        const booking = snapshot.data() as BookingRequest
+        if (booking.schoolId !== user.schoolId) {
+            throw new Error("Not authorised for this school.")
+        }
+        if (booking.createdBy !== user.id) {
+            throw new Error("You are not authorised to cancel this booking.")
+        }
+        if (booking.status !== "pending" && booking.status !== "waitlisted" && booking.status !== "approved") {
+            throw new Error("This booking cannot be cancelled.")
+        }
+
+        const startTime = new Date(booking.startTime)
+        if (Number.isNaN(startTime.getTime())) {
+            throw new Error("This booking has an invalid start time.")
+        }
+        if (!canStudentCancelBooking(booking, user.id, new Date())) {
+            throw new Error("Bookings cannot be cancelled after they have started.")
+        }
+
+        transaction.update(ref, { status: "cancelled" })
+        return {
+            previousStatus: booking.status,
+            booking: {
+                id: snapshot.id,
+                ...booking,
+                status: "cancelled"
+            }
+        }
+    })
+
+    try {
+        await logAuditEvent({
+            actor: user,
+            action: "booking.cancelled",
+            entityType: "booking",
+            entityId: bookingId,
+            metadata: {
+                previousStatus: cancellation.previousStatus,
+                newStatus: "cancelled",
+                bookingType: cancellation.booking.type,
+                roomId: cancellation.booking.roomId,
+                ...(cancellation.booking.bandId ? { bandId: cancellation.booking.bandId } : {}),
+                startTime: cancellation.booking.startTime,
+                endTime: cancellation.booking.endTime
+            }
+        })
+    } catch (error) {
+        console.error("Failed to write booking cancellation audit event:", error)
+    }
+
+    return cancellation.booking
 }
 
 // Get pending bookings 

@@ -1,7 +1,7 @@
 // index.ts
 import express, {Request, Response} from "express"
 import cors from "cors"
-import {approveBooking, createBooking, denyBooking, getPendingBookings, getRollcall, getSchoolBookingsForDate, getTodayAttendance, getUserBookings} from "./services/bookingService"
+import {approveBooking, cancelBooking, createBooking, denyBooking, getPendingBookings, getRollcall, getSchoolBookingsForDate, getTodayAttendance, getUserBookings} from "./services/bookingService"
 import { createBand, approveBand, denyBand, disbandBand, getActiveBands, getBandsForUser, getPendingBands, leaveBand } from "./services/bandService"
 import { authMiddleware, authTokenOnly } from "./middleware/authMiddleware"
 import { AuthenticatedRequest } from "./types/auth"
@@ -560,4 +560,21 @@ const PORT = process.env.PORT || 3000
 // Set listen to port 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
+})
+// Cancel a student-owned booking before it starts.
+app.patch("/bookings/:id/cancel", authMiddleware, async (req:AuthenticatedRequest, res:Response) => {
+    try {
+        const bookingId = req.params.id
+        if (typeof bookingId !== "string") {
+            return res.status(400).json({ error:"Invalid booking ID." })
+        }
+        const result = await cancelBooking(bookingId, req.user)
+        return res.json({
+            success:true,
+            status:result.status,
+            booking:result
+        })
+    } catch (err) {
+        return res.status(400).json({ error:err.message })
+    }
 })

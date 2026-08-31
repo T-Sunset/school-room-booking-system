@@ -45,6 +45,16 @@ export async function denyBooking(bookingId: string): Promise<BookingActionRespo
     return response.data
 }
 
+export type BookingCancellationResponse = BookingActionResponse & {
+    booking: BookingRequest
+}
+
+// Cancel a student-owned booking before it starts.
+export async function cancelBooking(bookingId: string): Promise<BookingCancellationResponse> {
+    const response = await api.patch(`/bookings/${bookingId}/cancel`)
+    return response.data
+}
+
 // Get the current authoritative Rollcall for staff.
 export async function getRollcall(): Promise<RollcallEntry[]> {
     const response = await api.get("/rollcall")

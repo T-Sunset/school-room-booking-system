@@ -26,6 +26,7 @@ export type BookingRequest = {
     endTime: string,
 
     status: BookingStatus,
+    weeklyEntitlementConsumed: boolean,
     reason: string,
     approvedBy: string,
     approvedAt: string,
@@ -56,10 +57,43 @@ export function initialBooking(input:PossibleBooking) : BookingRequest {
         startTime:"",
         endTime:"",
         status:"pending",
+        weeklyEntitlementConsumed:false,
         reason:"",
         approvedBy:"",
         approvedAt:"",
         schoolId:"",
         createdAt:new Date().toISOString()
     }
+}
+
+type WeeklyEntitlementBooking = Pick<BookingRequest, "type" | "status" | "startTime" | "weeklyEntitlementConsumed">
+
+export function hasConsumedWeeklySoloEntitlement(booking: WeeklyEntitlementBooking): boolean {
+    return booking.type === "solo" &&
+        (booking.status === "approved" || booking.status === "cancelled") &&
+        booking.weeklyEntitlementConsumed === true
+}
+
+export function countWeeklySoloEntitlements(bookings: WeeklyEntitlementBooking[], weekStart: Date): number {
+    const nextWeek = new Date(weekStart)
+    nextWeek.setDate(nextWeek.getDate() + 7)
+
+    return bookings.filter((booking) => {
+        if (!hasConsumedWeeklySoloEntitlement(booking)) return false
+
+        const bookingStart = new Date(booking.startTime)
+        return !Number.isNaN(bookingStart.getTime()) &&
+            bookingStart >= weekStart &&
+            bookingStart < nextWeek
+    }).length
+}
+
+type StudentCancellableBooking = Pick<BookingRequest, "createdBy" | "status" | "startTime">
+
+export function canStudentCancelBooking(booking: StudentCancellableBooking, studentId: string, now: Date): boolean {
+    if (booking.createdBy !== studentId) return false
+    if (booking.status !== "pending" && booking.status !== "waitlisted" && booking.status !== "approved") return false
+
+    const startTime = new Date(booking.startTime)
+    return !Number.isNaN(startTime.getTime()) && now < startTime
 }
