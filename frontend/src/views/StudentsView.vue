@@ -1,5 +1,5 @@
 <script setup lang="ts">
-    import { onMounted, ref } from 'vue'
+    import { nextTick, onMounted, ref } from 'vue'
     import { getStudentRoster, issueStudentStrike } from '../services/userService'
     import { useAuthStore } from '../stores/authStore'
     import type { StudentRosterEntry } from '../types/Student'
@@ -10,6 +10,10 @@
     const error = ref('')
     const success = ref('')
     const actionStudentId = ref('')
+    const strikeStudent = ref<StudentRosterEntry | null>(null)
+    const strikeReason = ref('')
+    const strikeDialogError = ref('')
+    const strikeReasonInput = ref<HTMLTextAreaElement | null>(null)
     const isStaff = authStore.role === 'teacher' || authStore.role === 'admin'
 
     onMounted(loadRoster)
@@ -49,23 +53,41 @@
         return value ? new Date(value).toLocaleString() : 'unknown'
     }
 
-    async function issueStrike(student: StudentRosterEntry) {
-        const reason = window.prompt(`Reason for issuing a strike to ${student.email}:`)
-        if (reason === null) return
-        if (!reason.trim()) {
-            error.value = 'A reason is required to issue a strike.'
+    async function openStrikeDialog(student: StudentRosterEntry) {
+        strikeStudent.value = student
+        strikeReason.value = ''
+        strikeDialogError.value = ''
+        await nextTick()
+        strikeReasonInput.value?.focus()
+    }
+
+    function closeStrikeDialog() {
+        strikeStudent.value = null
+        strikeReason.value = ''
+        strikeDialogError.value = ''
+    }
+
+    async function issueStrike() {
+        const student = strikeStudent.value
+        const reason = strikeReason.value.trim()
+        if (!student) return
+        if (!reason) {
+            strikeDialogError.value = 'A reason is required to issue a strike.'
+            strikeReasonInput.value?.focus()
             return
         }
 
         actionStudentId.value = student.id
+        strikeDialogError.value = ''
         error.value = ''
         success.value = ''
         try {
-            await issueStudentStrike(student.id, reason.trim())
+            await issueStudentStrike(student.id, reason)
             await loadRoster()
             success.value = `Strike issued to ${student.email}.`
+            closeStrikeDialog()
         } catch (err: any) {
-            error.value = err.response?.data?.error || err.message || 'Unable to issue the strike.'
+            strikeDialogError.value = err.response?.data?.error || err.message || 'Unable to issue the strike.'
         } finally {
             actionStudentId.value = ''
         }
@@ -110,7 +132,7 @@
                             </span>
                         </td>
                         <td>
-                            <button class="btn btn-sm btn-outline-danger" :disabled="actionStudentId !== ''" @click="issueStrike(student)">
+                            <button class="btn btn-sm btn-outline-danger" :disabled="actionStudentId !== ''" @click="openStrikeDialog(student)">
                                 {{ actionStudentId === student.id ? 'Issuing...' : 'Issue strike' }}
                             </button>
                         </td>
@@ -119,4 +141,42 @@
             </table>
         </div>
     </template>
+
+    <div v-if="strikeStudent" class="modal-backdrop-custom" @keydown.esc="closeStrikeDialog">
+        <div
+            class="modal-dialog-custom"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="strike-modal-title"
+            aria-describedby="strike-modal-description"
+            tabindex="-1">
+            <div class="card p-4 modal-card">
+                <h4 id="strike-modal-title">Issue a strike</h4>
+                <p id="strike-modal-description">
+                    Issue a strike to <strong>{{ strikeStudent.email }}</strong>.
+                </p>
+                <div v-if="strikeDialogError" class="alert alert-danger" role="alert">{{ strikeDialogError }}</div>
+                <form @submit.prevent="issueStrike">
+                    <label for="strike-reason" class="form-label">Reason</label>
+                    <textarea
+                        id="strike-reason"
+                        ref="strikeReasonInput"
+                        v-model="strikeReason"
+                        class="form-control form-textarea-resizable"
+                        rows="4"
+                        required
+                        aria-required="true"
+                        placeholder="Enter the reason for this strike."></textarea>
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button type="button" class="btn btn-secondary" :disabled="actionStudentId !== ''" @click="closeStrikeDialog">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-danger" :disabled="actionStudentId !== '' || !strikeReason.trim()">
+                            {{ actionStudentId !== '' ? 'Issuing...' : 'Issue Strike' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </template>

@@ -54,7 +54,7 @@ Deactivation preserves the room document and historical booking references. It c
 - Staff approval and denial of pending and waitlisted bookings.
 - Booking statuses: `approved`, `pending`, `waitlisted`, `denied`, and `cancelled`.
 
-The current application does not provide a booking cancellation or rescheduling workflow.
+- Students can cancel eligible future bookings; cancelled bookings remain in history and no longer block availability.
 
 ### Bands
 
@@ -103,17 +103,15 @@ Attendance updates are restricted to authorised staff, approved bookings, associ
 
 ## Screenshots
 
-The repository currently contains no application screenshots. This section is ready to be populated with real screenshots of the current interface.
+The following screenshots are from the deployed rehearsal application and use synthetic data only:
 
-Suggested screenshots:
+![Dashboard](docs/screenshots/dashboard.png)
 
-- Dashboard
-- Room timetable
-- Booking flow
-- Bands view
-- Today's Attendance
-- Audit viewer
-- Mobile navigation and mobile timetable
+![Room timetable](docs/screenshots/room-timetable.png)
+
+![Bands](docs/screenshots/bands.png)
+
+![Admin audit viewer](docs/screenshots/admin-audit.png)
 
 ## Architecture
 
@@ -261,6 +259,20 @@ npm run build
 
 The build runs Vue/TypeScript validation through `vue-tsc` before invoking Vite.
 
+## Deployment Preparation
+
+The backend production artifact is built with `npm run build` and started with `npm run start`; the latter runs `node dist/index.js` and does not require `ts-node-dev`. `backend/Dockerfile` builds that artifact in a separate stage and copies only compiled output and production dependencies into the runtime image. `backend/.dockerignore` excludes local environment files and service-account keys.
+
+Firebase Hosting is configured in `firebase.json` to serve the Vite output at `frontend/dist` and rewrite non-file routes to `index.html` for Vue Router. No `.firebaserc` is committed, so the deployment target must be selected explicitly with the Firebase CLI, for example `firebase deploy --project <developer-project-id>`. Use a separate developer/test Firebase project for rehearsal; never use school production identifiers or data during rehearsal.
+
+Before a production build, provide the frontend variables from `frontend/.env.local` or the hosting build environment. Cloud Run should receive `PORT`, `CORS_ALLOWED_ORIGINS`, and `TZ=Australia/Melbourne` through runtime configuration, with the school's actual frontend origin supplied only at deployment time.
+
+The eventual Cloud Run service should use a dedicated service account owned by the school. The current backend uses Firebase Admin to verify ID tokens and read/write Firestore; the runtime identity therefore needs the least-privilege Firestore data access role required by the school's chosen IAM policy (typically `roles/datastore.user`). Token verification does not require a distributed JSON key or Firebase Authentication data-management permissions. Review the final permissions with the school before granting them.
+
+The checked-in `firestore.indexes.json` contains the composite indexes required by the current audit, booking, room, band, user, and strike query shapes. Deploy them with `firebase deploy --only firestore:indexes --project <project-id>` and wait until every index is Ready/Enabled.
+
+The deployment was rehearsed successfully in a separate Firebase project using synthetic data. Firebase Hosting and Cloud Run are supported deployment targets. Environment separation keeps local development, rehearsal, and eventual school production configuration distinct; the rehearsal project is not production. School provisioning is documented in [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Testing
 
 ### Frontend
@@ -292,30 +304,23 @@ cd backend
 npm test
 ```
 
-#### Current testing limitation
-
-The six discovered backend test files currently do not execute their assertions successfully. The native Node test runner encounters the repository's CommonJS/ESM and TypeScript module-configuration mismatch during test loading, and one `.mjs` test reports an unavailable module export.
-
-There is currently no integration or end-to-end test suite. This is known technical debt rather than an unimplemented core application feature.
+The rehearsal backend regression suite completes with 56 passing tests and 0 failures. There is no committed integration or end-to-end test suite; cloud acceptance testing is documented in `DEPLOYMENT.md`.
 
 ## Project Status
 
 The core application feature set is implemented, including authentication, RBAC, school isolation, room management, room availability, booking approval workflows, bands, strikes, attendance, responsive views, and audit review.
 
-The frontend production build currently passes. Remaining work is primarily test-runner configuration, broader automated coverage, production deployment hardening, and optional feature extensions rather than the original core workflow.
+The frontend production build currently passes. Remaining work is environment-specific production provisioning, operational hardening, and optional feature extensions rather than the original core workflow.
 
 This project is not presented as a finished commercial SaaS product or as generally production-ready without further operational review.
 
 ## Known Limitations & Future Improvements
 
-- Resolve the backend CommonJS/ESM test-runner configuration and restore executable assertions.
 - Add integration and end-to-end tests.
-- Add booking cancellation and rescheduling workflows.
 - Add email or in-application notifications.
-- Add an Admin frontend for role management.
 - Improve concurrency protection around simultaneous booking conflicts.
 - Add historical attendance and reporting views.
-- Complete production deployment, monitoring, and operational hardening.
+- Complete school production monitoring and operational hardening.
 - Evaluate broader multi-school hosted deployment requirements.
 
 These items are future improvements and do not prevent the current core application workflow from functioning.
@@ -326,4 +331,4 @@ This system was built as a practical full-stack software-engineering project aro
 
 ## License
 
-No standalone repository `LICENSE` file is currently provided. The README does not assign a project license.
+This repository uses the custom **School Room Booking System Free Use Licence**, which is source-available and is not an open-source licence. It permits free use by schools, educational organisations, and other recipients, but does not permit modification, derivative works, forks, or redistribution of modified versions without written permission. See [LICENSE](LICENSE) for the complete terms. Production deployment remains subject to the school's operational review and any required legal review.
