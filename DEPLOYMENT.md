@@ -1,110 +1,56 @@
 # School Room Booking System Deployment Guide
 
-This guide is for the school IT administrator responsible for creating and operating a school-owned production deployment. It describes the deployment shape rehearsed in the separate `school-room-booking-rehearsal` project. Do not reuse that project for production.
+This guide is for a school IT administrator. It uses the successful deployment rehearsal as its reference. Create a new school-owned production project; do not reuse `school-room-booking-rehearsal`, which is test-only.
 
-## 1. Ownership model
-
-The ownership boundary should be explicit:
+## Ownership
 
 ```text
-Developer
-    |
-    | owns and maintains the GitHub source repository
-    v
-School
-    |
-    +-- owns the production Google Cloud/Firebase project
-    +-- owns production Firebase Authentication
-    +-- owns production Firestore and school data
-    +-- owns the production Cloud Run service
-    +-- owns production Firebase Hosting
+Developer -> owns and maintains the GitHub source repository
+School    -> owns production Google Cloud/Firebase project
+          -> owns Authentication, Firestore/data, Cloud Run, and Hosting
 ```
 
-The developer can publish reviewed bug fixes and features to the GitHub repository without ordinary access to the school's production student data. The school controls production project access, deployment approval, credentials, backups, monitoring, and incident response.
+The developer can publish reviewed fixes to GitHub without ordinary access to production student data. The school controls production access, approvals, credentials, backups, monitoring, and incidents.
 
-## 2. Prerequisites
+## Prerequisites
 
-The school should provide:
+The school needs a managed Google account, a new Google Cloud project, a billing account, Git, Node.js/npm, Firebase CLI (`npm install -g firebase-tools`), and Google Cloud CLI (`gcloud`). Cloud Build can build the included Dockerfile remotely; Docker Desktop is not required. Billing may apply to Firestore, Cloud Run, Cloud Build, Artifact Registry, Hosting, and related usage.
 
-- A Google account or managed Google Workspace account for the deployment administrator.
-- A new Google Cloud project owned and billed by the school.
-- A billing account attached to that project. Firebase, Firestore, Cloud Run, Cloud Build, Artifact Registry, and related usage may incur charges.
-- Node.js and npm for local validation and frontend builds.
-- Firebase CLI: `npm install -g firebase-tools`.
-- Google Cloud CLI: install `gcloud` from the official Google Cloud documentation.
-- A Git client and access to the source repository.
-- Permission to create Firebase resources, service accounts, Cloud Run services, Cloud Build builds, and Hosting releases.
+Enable or allow Cloud Resource Manager, Service Usage, Cloud Run Admin, Cloud Build, Artifact Registry, Firestore, Firebase Management, Firebase Authentication, Firebase Hosting, and IAM Service Account Credentials APIs.
 
-Docker Desktop is not required. The included `backend/Dockerfile` can be built remotely with Cloud Build. A local Docker installation is useful only for optional local container testing.
+## Create the production project
 
-Enable or allow the following APIs in the production project as prompted:
-
-- Cloud Resource Manager API
-- Service Usage API
-- Cloud Run Admin API
-- Cloud Build API
-- Artifact Registry API
-- Firestore API
-- Firebase Management API
-- Firebase Authentication API
-- Firebase Hosting API
-- IAM Service Account Credentials API, where required by the selected deployment workflow
-
-## 3. Create a production project
-
-1. In Google Cloud Console, create a new project owned by the school. Use a clear school-controlled project ID.
-2. Attach the school's billing account.
-3. Record the project ID. It is used in every deployment command.
-4. Do not select or reuse `school-room-booking-rehearsal`; that project is test-only.
-5. Grant deployment access to the small set of school IT administrators who need it. Use least privilege and managed accounts.
-
-Then authenticate the command-line tools:
+1. Create a new project owned by the school and attach its billing account.
+2. Record its project ID and choose the production region carefully.
+3. Do not reuse `school-room-booking-rehearsal`.
+4. Grant deployment access only to approved school IT administrators.
+5. Authenticate:
 
 ```bash
 gcloud auth login
-gcloud config set project <school-production-project-id>
+gcloud config set project <school-project-id>
 firebase login
-firebase use --add
 ```
 
-Select the school project when Firebase CLI asks. Because this repository does not commit a `.firebaserc`, always pass `--project <school-production-project-id>` explicitly in deployment commands.
+This repository has no committed `.firebaserc`; pass `--project <school-project-id>` explicitly.
 
-## 4. Enable Firebase services
+## Firebase and Firestore
 
-From Firebase Console, add Firebase to the new Google Cloud project. Then configure:
+Add Firebase to the project. Enable Authentication with the Email/Password provider, add the final Hosting/custom domain under Authentication authorized domains, create Firestore in **Native mode**, and add a Firebase Web App. Initialise/link Firebase Hosting using the repository's `firebase.json`; it serves `frontend/dist` and rewrites Vue routes to `index.html`.
 
-1. Authentication: enable the Email/Password sign-in provider.
-2. Authentication > Settings > Authorized domains: add the final Firebase Hosting domain and any approved custom school domain.
-3. Firestore Database: create a database in **Native mode** in the intended production region. Choose the region carefully because it cannot be changed casually later.
-4. Hosting: initialise or link Firebase Hosting for the project, keeping the repository's `firebase.json` hosting target. The configured public directory is `frontend/dist` and non-file routes rewrite to `index.html` for Vue Router.
-5. Add a Firebase Web App and record its web configuration. The web API key is a client identifier, not a server credential, but production values should still be kept in the school's deployment environment rather than committed to the repository.
-
-## 5. Firestore setup and initial administrator
-
-Deploy the repository indexes before exercising the application:
+Deploy the authoritative repository indexes:
 
 ```bash
-firebase deploy --only firestore:indexes --project <school-production-project-id>
+firebase deploy --only firestore:indexes --project <school-project-id>
 ```
 
-In Firestore, confirm every index reaches **Ready/Enabled** before using the corresponding screens. The authoritative definitions are in `firestore.indexes.json`; they cover audit logs, bands, bookings, rooms, users, and strikes.
+The checked-in `firestore.indexes.json` covers audit logs, bands, bookings, rooms, users, and strikes. Confirm every index is Ready/Enabled before testing. A valid query can return `FAILED_PRECONDITION` until its index is enabled.
 
-Create the initial school document using the project's controlled administrative provisioning process. The school document must contain the school identity and the permitted student email-domain configuration used by the application. Do not put real student data in source control.
+Create the initial school document with its production `schoolId`, identity, and permitted email domains. Provision the first Firebase Authentication account and matching Firestore profile manually through a controlled, access-restricted process with role `admin` and the production school ID. The normal app has no unauthenticated bootstrap mechanism, and this repository provides no bootstrap script. Do not copy rehearsal users, data, passwords, or keys.
 
-Create the initial administrator in Firebase Authentication using the school's controlled account process, then create the matching Firestore user profile with:
+## Backend deployment
 
-- the Firebase Authentication UID;
-- the production `schoolId`;
-- role `admin`;
-- the administrator's approved profile fields.
-
-This is deliberately a controlled provisioning task. The normal application does not expose an unauthenticated bootstrap mechanism, and this repository does not provide a bootstrap script. Do not invent one by copying rehearsal credentials or service-account files. Use a reviewed, access-controlled Firebase Console/Admin SDK procedure and record who performed it.
-
-After bootstrap, sign in as the administrator and create or invite the remaining accounts through the school's approved account-management process. Verify every profile has the intended school and role.
-
-## 6. Backend deployment
-
-### Build and validate
+Validate locally:
 
 ```bash
 cd backend
@@ -114,178 +60,87 @@ npx tsc --noEmit
 npm run build
 ```
 
-The backend Dockerfile performs the production build in a build stage and runs compiled output with production dependencies in the runtime stage.
+`backend/Dockerfile` builds TypeScript remotely/in a build stage and runs compiled output with production dependencies. Create a dedicated school-owned Cloud Run runtime service account and grant least-privilege Firestore access, typically `roles/datastore.user` after review.
 
-### Runtime identity
+Cloud Run uses its managed runtime identity and Application Default Credentials. This is different from a local `serviceAccountKey.json`, which is a sensitive downloaded key for local development only. Production must not require or contain a service-account JSON key.
 
-Create a dedicated Cloud Run runtime service account owned by the school, for example `room-booking-runtime@<project-id>.iam.gserviceaccount.com`. Grant only the data access required by the chosen Firestore/IAM design, typically `roles/datastore.user`, and review the permission set with the school's cloud administrator.
-
-Cloud Run should use this managed runtime identity through its service configuration. It uses Application Default Credentials automatically. The production service should **not** require a service-account JSON key.
-
-A local `serviceAccountKey.json` is a different thing: it is a sensitive downloaded key used only for local development when explicitly configured. It is ignored by Git and must never be uploaded to Cloud Run, copied into a container, or committed to the repository. Prefer local Application Default Credentials where practical.
-
-### Build and deploy with Cloud Build
-
-From the repository root, submit the backend Dockerfile to Cloud Build. The exact Artifact Registry repository and region are school choices; keep them in the school project:
+Build and deploy with Cloud Build:
 
 ```bash
-gcloud builds submit backend \
-  --tag <region>-docker.pkg.dev/<school-project-id>/<repository>/room-booking-api:latest \
-  --project <school-project-id>
+gcloud builds submit backend --tag <region>-docker.pkg.dev/<school-project-id>/<repository>/room-booking-api:latest --project <school-project-id>
+gcloud run deploy room-booking-api --image <region>-docker.pkg.dev/<school-project-id>/<repository>/room-booking-api:latest --region <region> --service-account <runtime-account> --set-env-vars TZ=Australia/Melbourne,CORS_ALLOWED_ORIGINS=https://<hosting-domain> --project <school-project-id>
 ```
 
-Deploy the image to Cloud Run with the school-owned runtime account:
+Cloud Run supplies `PORT`. Required runtime settings are `TZ=Australia/Melbourne` and the exact production `CORS_ALLOWED_ORIGINS`. `SERVICE_ACCOUNT_KEY_PATH` is local-only; do not point it at a committed/containerised key. Review startup and request logs after deployment.
 
-```bash
-gcloud run deploy room-booking-api \
-  --image <region>-docker.pkg.dev/<school-project-id>/<repository>/room-booking-api:latest \
-  --region <cloud-run-region> \
-  --service-account room-booking-runtime@<school-project-id>.iam.gserviceaccount.com \
-  --set-env-vars TZ=Australia/Melbourne,CORS_ALLOWED_ORIGINS=https://<hosting-domain> \
-  --project <school-project-id>
-```
+## Frontend deployment
 
-Cloud Run provides `PORT`; the application listens on that runtime port. Required application configuration is:
-
-- `PORT`: supplied by Cloud Run; use `3000` for local development.
-- `TZ=Australia/Melbourne`: the school's IANA timezone, confirmed in the rehearsal.
-- `CORS_ALLOWED_ORIGINS`: the exact production Hosting origin, with comma-separated origins only if additional approved origins are required.
-- `SERVICE_ACCOUNT_KEY_PATH`: local-only configuration when using a local key; do not set it to a committed or containerised key in production.
-
-After deployment, record the Cloud Run service URL and use it as the frontend API URL. Review Cloud Run revision logs and confirm the service starts without credential, Firestore, or CORS errors.
-
-## 7. Frontend deployment
-
-Create the production Vite environment in the school's protected build environment. Do not commit `.env.local`, `.env.production`, or real environment files. The required variables are represented by `frontend/.env.example`:
+Provide these Vite variables only in the protected build environment; never commit `.env.local`, `.env.production`, or real values:
 
 ```text
-VITE_FIREBASE_API_KEY=<school-firebase-web-api-key>
-VITE_FIREBASE_AUTH_DOMAIN=<school-project-id>.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=<school-project-id>
-VITE_FIREBASE_STORAGE_BUCKET=<school-project-id>.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=<school-sender-id>
-VITE_FIREBASE_APP_ID=<school-app-id>
-VITE_API_BASE_URL=https://<cloud-run-service-url>
+VITE_FIREBASE_API_KEY=<web-api-key>
+VITE_FIREBASE_AUTH_DOMAIN=<project>.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=<project-id>
+VITE_FIREBASE_STORAGE_BUCKET=<project>.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=<sender-id>
+VITE_FIREBASE_APP_ID=<app-id>
+VITE_API_BASE_URL=https://<cloud-run-url>
 ```
 
-Build and deploy from the `frontend` directory while those variables are available to Vite:
+Then build and deploy explicitly to the school project:
 
 ```bash
 cd frontend
 npm ci
 npm run build
 cd ..
-firebase deploy --only hosting --project <school-production-project-id>
+firebase deploy --only hosting --project <school-project-id>
 ```
 
-Firebase Hosting serves `frontend/dist` according to `firebase.json`. Confirm the deployed URL is included in Firebase Authentication authorized domains and matches `CORS_ALLOWED_ORIGINS` exactly, including scheme and hostname.
+Confirm the Hosting origin is an Authentication authorized domain and exactly matches Cloud Run CORS configuration.
 
-## 8. Acceptance checklist
+## Acceptance checklist
 
-Use synthetic or approved school test accounts and avoid real student data in development. Record the result for each item:
+Use approved test accounts and synthetic data where possible:
 
-- Administrator can sign in and sees Admin navigation.
-- Teacher can sign in and sees only teacher-authorised operations.
-- Student can sign in and sees only student navigation.
-- Student2 or a second approved student can sign in if the school's test procedure requires it.
-- Admin can create and edit a room.
-- Room rules, allowed days, year levels, opening hours, and booking agreement are correct.
-- Room timetable displays available and booked intervals.
-- Student can search for a valid room slot and create a solo booking.
-- Staff can approve or deny the booking where approval is required.
-- Student can view booking history and cancel an eligible future booking.
-- Cancelled history remains visible and no longer blocks availability where applicable.
-- Students can create a band with valid same-school student members.
-- Staff can approve the band and members can use it for a band booking.
-- Staff can issue a strike and the student warning/ban state persists.
-- Staff can view Dashboard Current Rollcall and Today's Attendance when a booking is active.
-- Staff can record Present/Absent and verify refresh persistence and audit events.
-- Admin can assign a role to another account and restore it to the intended role.
-- Admin audit viewer loads, filters, and paginates without missing-index errors.
-- Admin can deactivate and reactivate a room, leaving it active/bookable.
-- Test navigation and dialogs at desktop and mobile widths, including 320px.
+- Admin, teacher, student, and second-student login and role visibility.
+- Room creation/editing, rules, timetable, deactivation/reactivation.
+- Valid solo booking, approval, history, cancellation, and availability.
+- Band creation, same-school membership, approval, and band booking.
+- Strike issuance, warning/ban state, persistence, and audit record.
+- Dashboard Current Rollcall and Today's Attendance for an active approved booking.
+- Present/Absent persistence and attendance audit events.
+- Role assignment and restoration by admin.
+- Audit filters, newest-first ordering, and pagination.
+- Mobile/responsive checks at 1440, 1200, 1024, 900, 768, 600, 390, and 320px.
 
-## 9. Maintenance and release workflow
-
-The intended workflow is:
+## Maintenance and operations
 
 ```text
-Developer
-    |
-    | fix or feature
-    v
-GitHub source repository
-    |
-    | school IT reviews the release
-    v
-School IT deploys the approved revision
+Developer -> fix/feature -> GitHub -> school IT reviews -> approved deployment
 ```
 
-No CI/CD is required by this repository. School IT should review source changes, dependency changes, release notes, environment values, database/index changes, and rollback options before production deployment. Deploy backend and frontend revisions in a controlled order, then run the acceptance checklist.
+No CI/CD is required. School IT owns release approval, Firestore backups/exports and restore tests, Cloud Run/Hosting/Firestore monitoring, Authentication administration and recovery, staff offboarding, incident response, audit retention, IAM review, budgets, quotas, and Google Cloud billing. Keep at least two approved school administrators and document recovery procedures.
 
-## 10. Backups and operations
+## Troubleshooting
 
-These are school responsibilities unless a separate support agreement says otherwise:
+- **Missing index:** deploy `firestore.indexes.json`, wait for Ready/Enabled, then retry. Distinguish an intentional empty database from a failed `FAILED_PRECONDITION` request in Network and Cloud Run logs.
+- **Wrong frontend environment:** Vite embeds `VITE_*` values at build time. Remove stale local overrides, rebuild, and confirm the Firebase project and API URL in the build environment.
+- **Wrong API URL:** `VITE_API_BASE_URL` must be the deployed Cloud Run URL, not localhost or rehearsal.
+- **CORS mismatch:** set `CORS_ALLOWED_ORIGINS` to the exact Hosting origin, including scheme and custom-domain variants.
+- **Auth domain failure:** add every approved Hosting/custom domain in Firebase Authentication authorized domains.
+- **Cloud Run credentials:** verify the school-owned managed service account, Firestore IAM, APIs, and startup logs. Do not upload `serviceAccountKey.json`.
+- **Empty versus failure:** empty rooms/bookings/bands/audit data can be valid after provisioning; a failed request or `FAILED_PRECONDITION` is different.
 
-- Configure and regularly test Firestore backups or exports, with retention appropriate to school policy.
-- Monitor Firestore, Cloud Run, Cloud Build, Firebase Authentication, and Hosting usage and errors.
-- Review Cloud Run structured logs after releases and during incidents.
-- Administer Authentication accounts, password recovery, MFA or Workspace policy where applicable, and authorised domains.
-- Remove access and disable accounts promptly when staff or contractors leave.
-- Maintain at least two authorised school administrators and a documented recovery route.
-- Preserve audit records according to school retention and privacy policy.
-- Define incident response for compromised accounts, incorrect role assignments, data access concerns, and service outages.
-- Monitor Google Cloud billing, budgets, quotas, and billing alerts.
-- Review production IAM periodically and rotate any local development credentials.
-
-## 11. Troubleshooting
-
-### Missing Firestore index
-
-A valid request can return `FAILED_PRECONDITION` when a required composite index is absent or still building. Deploy the repository definitions:
-
-```bash
-firebase deploy --only firestore:indexes --project <school-production-project-id>
-```
-
-Then wait for each index to become Ready/Enabled. Retry the affected screen only after the index is ready. Do not treat an empty result as proof that the query is valid: distinguish an intentional empty database state from a failed request in browser Network, Cloud Run logs, and Firebase logs.
-
-### Wrong frontend environment
-
-Vite embeds `VITE_*` values at build time. If the page authenticates against the wrong Firebase project or calls localhost, inspect the protected build environment, remove stale `.env.local` overrides, rebuild, and redeploy Hosting. Confirm the built application points to the school's project and Cloud Run URL.
-
-### Wrong API URL
-
-The frontend must use `VITE_API_BASE_URL` pointing to the deployed Cloud Run service. A localhost URL or an old rehearsal URL causes failed API requests even if Firebase Authentication works.
-
-### CORS mismatch
-
-Set Cloud Run `CORS_ALLOWED_ORIGINS` to the exact Hosting origin. Check scheme, hostname, and custom-domain variants. Redeploy the Cloud Run revision after changing it, then inspect the browser Network response and Cloud Run logs.
-
-### Authentication authorized-domain failure
-
-Add the Firebase Hosting hostname and any approved custom hostname under Firebase Authentication authorized domains. This is separate from the Firebase Web App configuration and separate from CORS.
-
-### Cloud Run credentials or runtime identity
-
-Production Cloud Run should use its school-owned managed service account and Application Default Credentials. Do not upload `serviceAccountKey.json`. Check the Cloud Run revision service account, IAM roles, project selection, Firestore API, and startup logs. A local key that works on a developer machine does not prove the Cloud Run identity is configured.
-
-### Empty database versus missing-index behavior
-
-A newly provisioned school may legitimately show empty rooms, bookings, bands, or audit results. A missing index usually appears as a failed request and a `FAILED_PRECONDITION` entry in logs. Check both the UI state and the request/log status before creating test data or changing application code.
-
-### Runtime and build checks
-
-Run the commands separately so failures are attributable:
+Run checks individually before release:
 
 ```bash
 cd backend
 npm test
 npx tsc --noEmit
 npm run build
-
 cd ../frontend
 npm run build
+git diff --check
+git status --short
 ```
-
-Do not deploy a revision until the relevant checks and the school acceptance checklist pass.

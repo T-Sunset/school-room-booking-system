@@ -3,71 +3,47 @@ Version 1.0
 
 Copyright (c) 2026 Daniel Chadderton
 
-1. Definitions
+1. Grant
+Subject to this licence, the copyright holder grants you a non-exclusive,
+worldwide, royalty-free licence to use the Software for personal, internal,
+school, educational, governmental, and non-profit purposes, and to make
+unmodified copies for those purposes. No payment is required for permitted use.
 
-"Software" means the source code, compiled code, documentation, configuration,
-screenshots, and other material distributed with this repository.
+2. Restrictions
+Without prior written permission from the copyright holder, you must not:
 
-"You" means the person or organisation receiving or using the Software.
+- modify, adapt, translate, transform, or create derivative works from the
+  Software;
+- fork or maintain a modified version;
+- publish, distribute, sublicense, sell, rent, or otherwise provide a modified
+  version; or
+- remove or alter copyright, licence, or attribution notices.
 
-2. Free use grant
+You may configure the Software and change operational data for permitted use,
+but those activities must not be used to circumvent these restrictions.
 
-Subject to these terms, the copyright holder grants You a non-exclusive,
-worldwide, royalty-free licence to:
+3. Additional permission
+The copyright holder may grant written permission for restricted acts. Such
+permission must identify the scope; none is implied by access to the source,
+an issue, a contribution suggestion, or a deployment.
 
- a. use the Software for personal, internal business, governmental, school,
-    educational, and non-profit purposes; and
- b. make unmodified copies of the Software for those purposes.
+4. Contributions
+Unless separately agreed in writing, do not submit material that requires
+rights broader than this licence.
 
-This licence does not require payment for permitted use. It does not transfer
-ownership or grant any right to use the copyright holder's name or trademarks.
+5. Termination
+This licence terminates automatically upon material breach. On termination,
+you must stop using and distributing the Software, except where applicable law
+requires otherwise.
 
-3. Restrictions
+6. Disclaimer
+The Software is provided "as is", without warranties of any kind. To the
+maximum extent permitted by law, the copyright holder is not liable for loss
+arising from use of or inability to use the Software.
 
-Without prior written permission from the copyright holder, You must not:
+7. General
+If a provision is unenforceable, it will be limited to the minimum necessary
+and the remainder will continue. This licence does not limit rights that law
+prohibits limiting.
 
- a. modify, adapt, translate, transform, or otherwise create derivative works
-    from the Software;
- b. fork or maintain a modified version of the Software;
- c. distribute, publish, sublicense, sell, rent, or otherwise provide a
-    modified version of the Software to another person; or
- d. remove or alter copyright, licence, or attribution notices.
-
-You may configure the Software for its permitted use, provide operational
-settings, and make ordinary data and deployment changes that do not modify the
-Software itself. You may not use those activities to circumvent the
-restrictions above.
-
-4. Permission for restricted acts
-
-The copyright holder may grant additional written permission for modification,
-derivative works, forks, or redistribution. Any such permission must identify
-the permitted acts and scope. No permission is implied by access to the source
-code, an issue discussion, a deployment, or a contribution suggestion.
-
-5. Contributions
-
-Unless a separate written agreement says otherwise, You must not submit code or
-other material that would require the copyright holder to grant rights broader
-than this licence.
-
-6. Termination
-
-This licence terminates automatically if You materially breach these terms. On
-termination, You must stop using and distributing the Software, except where
-applicable law requires otherwise. Rights that accrued before termination are
-not revived by later access to the repository.
-
-7. Disclaimer and limitation of liability
-
-The Software is provided "as is" and without warranties of any kind, express
-or implied, including fitness for a particular purpose, title, and
-non-infringement. To the maximum extent permitted by law, the copyright holder
-is not liable for any direct, indirect, incidental, special, consequential, or
-other loss arising from use of or inability to use the Software.
-
-8. Interpretation
-
-If any provision is unenforceable, it will be limited to the minimum extent
-necessary and the remaining provisions will continue. This licence does not
-limit rights that cannot lawfully be limited.
+This is a custom source-available licence, not an open-source licence.

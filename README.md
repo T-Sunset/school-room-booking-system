@@ -54,7 +54,7 @@ Deactivation preserves the room document and historical booking references. It c
 - Staff approval and denial of pending and waitlisted bookings.
 - Booking statuses: `approved`, `pending`, `waitlisted`, `denied`, and `cancelled`.
 
-- Students can cancel eligible future bookings; cancelled bookings remain in history and no longer block availability.
+Students can cancel eligible future bookings; cancelled bookings remain in history and no longer block availability where applicable.
 
 ### Bands
 
@@ -103,7 +103,7 @@ Attendance updates are restricted to authorised staff, approved bookings, associ
 
 ## Screenshots
 
-The following screenshots are from the deployed rehearsal application and use synthetic data only:
+The following screenshots are real captures from the deployed rehearsal application and use synthetic data only:
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -269,9 +269,9 @@ Before a production build, provide the frontend variables from `frontend/.env.lo
 
 The eventual Cloud Run service should use a dedicated service account owned by the school. The current backend uses Firebase Admin to verify ID tokens and read/write Firestore; the runtime identity therefore needs the least-privilege Firestore data access role required by the school's chosen IAM policy (typically `roles/datastore.user`). Token verification does not require a distributed JSON key or Firebase Authentication data-management permissions. Review the final permissions with the school before granting them.
 
-The checked-in `firestore.indexes.json` contains the composite indexes required by the current audit, booking, room, band, user, and strike query shapes. Deploy them with `firebase deploy --only firestore:indexes --project <project-id>` and wait until every index is Ready/Enabled.
+The checked-in `firestore.indexes.json` contains composite indexes for the current audit, booking, room, band, user, and strike query shapes. Deploy them with `firebase deploy --only firestore:indexes --project <project-id>` and wait until they are Ready/Enabled.
 
-The deployment was rehearsed successfully in a separate Firebase project using synthetic data. Firebase Hosting and Cloud Run are supported deployment targets. Environment separation keeps local development, rehearsal, and eventual school production configuration distinct; the rehearsal project is not production. School provisioning is documented in [DEPLOYMENT.md](DEPLOYMENT.md).
+Deployment was successfully rehearsed in a separate Firebase project using synthetic data. Firebase Hosting and Cloud Run are supported deployment targets, with separate local, rehearsal, and production environment values. School provisioning is documented in [DEPLOYMENT.md](DEPLOYMENT.md). This project is not presented as a commercial SaaS product.
 
 ## Testing
 
@@ -304,7 +304,7 @@ cd backend
 npm test
 ```
 
-The rehearsal backend regression suite completes with 56 passing tests and 0 failures. There is no committed integration or end-to-end test suite; cloud acceptance testing is documented in `DEPLOYMENT.md`.
+The backend regression suite currently completes with 56 passing tests and 0 failures. There is no committed integration or end-to-end suite; cloud acceptance testing is documented in `DEPLOYMENT.md`.
 
 ## Project Status
 
@@ -331,4 +331,4 @@ This system was built as a practical full-stack software-engineering project aro
 
 ## License
 
-This repository uses the custom **School Room Booking System Free Use Licence**, which is source-available and is not an open-source licence. It permits free use by schools, educational organisations, and other recipients, but does not permit modification, derivative works, forks, or redistribution of modified versions without written permission. See [LICENSE](LICENSE) for the complete terms. Production deployment remains subject to the school's operational review and any required legal review.
+This repository uses the custom **School Room Booking System Free Use Licence**, which is source-available and not an open-source licence. It permits free use, including by schools and educational organisations, but does not permit modification, derivative works, forks, or redistribution of modified versions without written permission. See [LICENSE](LICENSE) for the complete terms. Legal review is recommended before production adoption.
