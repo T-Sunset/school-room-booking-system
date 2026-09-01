@@ -312,7 +312,7 @@ The core application feature set is implemented, including authentication, RBAC,
 
 The frontend production build currently passes. Remaining work is environment-specific production provisioning, operational hardening, and optional feature extensions rather than the original core workflow.
 
-This project is not presented as a finished commercial SaaS product or as generally production-ready without further operational review.
+The application has been successfully deployed and tested in a production-like cloud rehearsal environment. It is suitable for controlled school deployment following the procedures in DEPLOYMENT.md. It is not presented as a general-purpose commercial SaaS product, and production deployments remain subject to school-specific operational, security, privacy, and infrastructure review.
 
 ## Known Limitations & Future Improvements
 
